@@ -608,6 +608,10 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   const [editRecurrence, setEditRecurrence] = useState<'once' | 'annual' | 'monthly'>('once');
   const [editStartAge, setEditStartAge] = useState<number>(currentAge + 1);
   const [editEndAge, setEditEndAge] = useState<number | ''>('');
+  
+  // Controle de expansão/colapso da tabela de fluxo de caixa anual
+  const [isFlowTableExpanded, setIsFlowTableExpanded] = useState<boolean>(false);
+  
   const [projection, setProjection] = useState(() => {
     const result = calculateRetirementProjection(
       currentAge,
@@ -1465,6 +1469,17 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
           className="mt-6"
         >
           <div className="border border-border rounded-md overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/60">
+              <div className="text-xs text-muted-foreground">
+                {isFlowTableExpanded ? 'Exibindo todos os anos' : 'Exibindo próximos 10 anos'}
+              </div>
+              <button
+                className="text-xs font-medium px-2 py-1 rounded-md border border-border hover:bg-muted/50"
+                onClick={() => setIsFlowTableExpanded(v => !v)}
+              >
+                {isFlowTableExpanded ? 'Colapsar' : 'Expandir'}
+              </button>
+            </div>
             <table className="w-full text-xs">
               <thead className="bg-muted/30">
                 <tr>
@@ -1479,7 +1494,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {(projection.fluxoCaixaAnual || []).map((row: any, idx: number) => (
+                {((projection.fluxoCaixaAnual || []).slice(0, isFlowTableExpanded ? undefined : 10)).map((row: any, idx: number) => (
                   <tr key={idx} className="border-b border-border last:border-0">
                     <td className="py-2 px-3">{row.idade}</td>
                     <td className="py-2 px-3">{row.fase}</td>

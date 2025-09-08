@@ -60,7 +60,7 @@ const SuccessionPlanning: React.FC<SuccessionPlanningProps> = ({ data, hideContr
 
   return (
     <section className="py-16 px-4" id="succession">
-      <div className="max-w-5xl mx-auto">
+      <div className="section-container">
         {/* Header */}
         <div
           ref={headerRef as React.RefObject<HTMLDivElement>}
@@ -194,18 +194,16 @@ const SuccessionPlanning: React.FC<SuccessionPlanningProps> = ({ data, hideContr
           </HideableCard>
         </div>
 
-        {/* Private Pension and Life Project */}
+        {/* Private Pension */}
         <div
           ref={cardRef3 as React.RefObject<HTMLDivElement>}
           className="animate-on-scroll delay-3"
         >
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Private Pension */}
-            <HideableCard
-              id="previdencia-privada-sucessao"
-              isVisible={isCardVisible("previdencia-privada-sucessao")}
-              onToggleVisibility={() => toggleCardVisibility("previdencia-privada-sucessao")}
-            >
+          <HideableCard
+            id="previdencia-privada-sucessao"
+            isVisible={isCardVisible("previdencia-privada-sucessao")}
+            onToggleVisibility={() => toggleCardVisibility("previdencia-privada-sucessao")}
+          >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield size={20} className="text-accent" />
@@ -248,38 +246,7 @@ const SuccessionPlanning: React.FC<SuccessionPlanningProps> = ({ data, hideContr
                   </div>
                 </div>
               </CardContent>
-            </HideableCard>
-
-            {/* Life Project */}
-            <HideableCard
-              id="projeto-vida-legado"
-              isVisible={isCardVisible("projeto-vida-legado")}
-              onToggleVisibility={() => toggleCardVisibility("projeto-vida-legado")}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users size={20} className="text-accent" />
-                  Projeto de Vida e Legado
-                </CardTitle>
-                <CardDescription>
-                  Planejamento além dos aspectos financeiros
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {projetoDeVida.map((fase, index) => (
-                    <div key={index} className="border-l-4 pl-4" style={{ borderColor: index === 1 ? '#FBBF24' : '#8B5CF6' }}>
-                      <div className="flex justify-between">
-                        <h3 className="font-medium">{fase.fase}</h3>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{fase.descricao}</p>
-                      <p className="text-xs mt-1">Prazo: {fase.prazo}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </HideableCard>
-          </div>
+          </HideableCard>
         </div>
       </div>
     </section>

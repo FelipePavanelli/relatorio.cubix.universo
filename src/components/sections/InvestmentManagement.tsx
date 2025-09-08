@@ -44,12 +44,12 @@ const investmentColors: Record<string, string> = {
   'Renda Fixa': '#60A5FA',           // Azul
   'Renda Variável': '#34D399',       // Verde
   'Multimercado': '#22D3EE',         // Ciano
-  'Outros': '#C084FC',               // Roxo claro
-  'Fundos Imobiliários': '#A78BFA',  // Roxo
+  'Outros': '#3B82F6',               // Azul claro
+  'Fundos Imobiliários': '#2563eb',  // Azul
   'Previdência': '#F59E0B',          // Amarelo
   'Tesouro Direto': '#EF4444',       // Vermelho
   'CDB': '#EC4899',                  // Rosa
-  'LCI/LCA': '#8B5CF6',              // Índigo
+  'LCI/LCA': '#1d4ed8',              // Azul escuro
   'Ações': '#F97316',                // Laranja
   'Fundos de Investimento': '#10B981', // Esmeralda
   'Criptomoedas': '#6366F1',         // Índigo
@@ -136,7 +136,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           <div className="inline-block">
             <div className="flex items-center justify-center mb-4">
               <div className="bg-investment-primary/10 p-3 rounded-full">
-                <BarChart3 size={28} className="text-investment-primary" />
+                <BarChart3 size={28} className="text-blue-600" />
               </div>
             </div>
             <h2 className="text-4xl font-bold mb-3">2. Gestão de Investimentos</h2>
@@ -192,13 +192,14 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           {/* Current Investments */}
           <div
             ref={currentInvestmentsCardRef as React.RefObject<HTMLDivElement>}
-            className="animate-on-scroll"
+            className="animate-on-scroll h-full"
           >
             <HideableCard
               id="current-investments"
               isVisible={isCardVisible("current-investments")}
               onToggleVisibility={() => toggleCardVisibility("current-investments")}
               hideControls={hideControls}
+              className="h-full"
             >
               <div className="p-6">
                 <div className="flex items-center gap-2 mb-4">
@@ -237,13 +238,14 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           {/* Suggested Investments */}
           <div
             ref={suggestedInvestmentsCardRef as React.RefObject<HTMLDivElement>}
-            className="animate-on-scroll delay-1"
+            className="animate-on-scroll delay-1 h-full"
           >
             <HideableCard
               id="suggested-investments"
               isVisible={isCardVisible("suggested-investments")}
               onToggleVisibility={() => toggleCardVisibility("suggested-investments")}
               hideControls={hideControls}
+              className="h-full"
             >
               <div className="p-6">
                 <div className="flex items-center gap-2 mb-4">

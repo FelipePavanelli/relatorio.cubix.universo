@@ -127,12 +127,12 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
           className="mb-12 text-center animate-on-scroll"
         >
           <div className="inline-block">
-            <div className="card-flex-center mb-4">
+            <div className="flex items-center justify-center mb-4">
               <div className="bg-accent/10 p-3 rounded-full">
                 <PiggyBank size={28} className="text-accent" />
               </div>
             </div>
-            <h2 className="text-4xl font-bold mb-3">3. Planejamento de Aposentadoria</h2>
+            <h2 className="heading-2 mb-3">3. Planejamento de Aposentadoria</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Estratégias e projeções para garantir sua independência financeira e
               qualidade de vida na aposentadoria.
@@ -151,57 +151,41 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
             hideControls={hideControls}
           >
             <CardHeader>
-              <CardTitle className="text-xl">Situação Financeira Atual</CardTitle>
+              <CardTitle className="card-title-standard text-lg">Situação Financeira Atual</CardTitle>
               <CardDescription>
                 Análise do seu patrimônio e fluxo financeiro
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid md:grid-cols-3 gap-6">
-              <div className="flex flex-col items-center">
-                <div className="text-sm text-muted-foreground mb-1">Patrimônio Líquido</div>
-                <div className="text-2xl font-semibold">
-                  {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0))}
+            <CardContent>
+              <div className="card-grid-3">
+                <div className="card-metric">
+                  <h3 className="card-metric-label">Investimentos Financeiros Atuais</h3>
+                  <div className="card-metric-value">
+                    {formatCurrency(
+                      (data?.totalInvestido ??
+                        (data?.ativos
+                          ?.filter(asset => asset.tipo === 'Investimentos')
+                          .reduce((sum, asset) => sum + asset.valor, 0))) || 0
+                    )}
+                  </div>
                 </div>
-                <div className="mt-1">
-                  <StatusChip
-                    status={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0)) >= 0 ? "success" : "danger"}
-                    label={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0)) >= 0 ? "Positivo" : "Negativo"}
-                  />
+                <div className="card-metric">
+                  <h3 className="card-metric-label">Excedente Mensal</h3>
+                  <div className="card-metric-value">
+                    {formatCurrency(data?.excedenteMensal || 0)}
+                  </div>
+                </div>
+                <div className="card-metric">
+                  <h3 className="card-metric-label">Patrimônio Líquido</h3>
+                  <div className="card-metric-value">
+                    {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0))}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col items-center">
-                <div className="text-sm text-muted-foreground mb-1">Excedente Mensal</div>
-                <div className="text-2xl font-semibold">
-                  {formatCurrency(data?.excedenteMensal || 0)}
-                </div>
-                <div className="mt-1">
-                  <StatusChip
-                    status={data?.excedenteMensal && data.excedenteMensal > 20000 ? "success" : "warning"}
-                    label={`${data?.excedenteMensal ? Math.round((data.excedenteMensal / 50000) * 100) : 0}% da renda`}
-                  />
-                </div>
-              </div>
+        
 
-              <div className="flex flex-col items-center">
-                <div className="text-sm text-muted-foreground mb-1">Investimentos Financeiros Atual</div>
-                <div className="text-2xl font-semibold">
-                  {formatCurrency(data?.ativos
-                    ?.filter(asset => asset.tipo === 'Investimentos')
-                    .reduce((sum, asset) => sum + asset.valor, 0) || 0)}
-                </div>
-                <div className="mt-1">
-                  <StatusChip
-                    status={data?.ativos?.filter(asset => asset.tipo === 'Investimentos')
-                      .reduce((sum, asset) => sum + asset.valor, 0) > 2000000 ? "success" : "warning"}
-                    label={`${data?.ativos && data.patrimonioLiquido
-                      ? Math.round((data.ativos
-                        .filter(asset => asset.tipo === 'Investimentos')
-                        .reduce((sum, asset) => sum + asset.valor, 0) / Math.abs(data.patrimonioLiquido)) * 100)
-                      : 0}% do patrimônio`}
-                  />
-                </div>
-              </div>
+
             </CardContent>
           </HideableCard>
         </div>
@@ -217,7 +201,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
             hideControls={hideControls}
           >
             <CardHeader>
-              <CardTitle className="text-xl">Objetivo de Aposentadoria</CardTitle>
+              <CardTitle className="card-title-standard text-lg">Objetivo de Aposentadoria</CardTitle>
               <CardDescription>
                 Baseado nas suas preferências e estilo de vida
               </CardDescription>
@@ -291,7 +275,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
             hideControls={hideControls}
           >
             <CardHeader>
-              <CardTitle className="text-xl">Projeção Patrimonial</CardTitle>
+              <CardTitle className="card-title-standard text-lg">Projeção Financeira</CardTitle>
               <CardDescription>
                 Análise da evolução do seu patrimônio ao longo do tempo
               </CardDescription>

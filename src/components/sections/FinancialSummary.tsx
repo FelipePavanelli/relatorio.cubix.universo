@@ -90,11 +90,11 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
               <div className="text-3xl font-bold mb-1">
                 {data.ativos.length > 0 ? formatCurrency(data.ativos[0].valor) : formatCurrency(0)}
               </div>
-              <StatusChip
+              {/* <StatusChip
                 status="success"
                 label="Sólido"
                 icon={<TrendingUp size={14} />}
-              />
+              /> */}
             </Card>
 
             {/* Renda Mensal */}
@@ -117,11 +117,11 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
               <div className="text-3xl font-bold mb-1">
                 {formatCurrency(surplusMonthly)}
               </div>
-              <StatusChip
+              {/* <StatusChip
                 status={surplusMonthly >= 0 ? "success" : "danger"}
                 label={surplusMonthly >= 0 ? "Positivo" : "Negativo"}
                 icon={surplusMonthly >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              />
+              /> */}
             </HideableCard>
           </div>
         </div>
@@ -239,21 +239,21 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
               {/* Resumo dos Totais */}
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-success">
+                  <div className="text-2xl font-bold text-foreground">
                     {formatCurrency(totalAtivosLista)}
                   </div>
                   <div className="text-sm text-muted-foreground">Total de Ativos</div>
                 </div>
                 
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-danger">
+                  <div className="text-2xl font-bold text-foreground">
                     {formatCurrency(totalPassivosLista)}
                   </div>
                   <div className="text-sm text-muted-foreground">Total de Passivos</div>
                 </div>
                 
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-financial-info">
+                  <div className="text-2xl font-bold text-foreground">
                     {formatCurrency(patrimonioLiquidoResumo)}
                   </div>
                   <div className="text-sm text-muted-foreground">Patrimônio Líquido</div>
@@ -264,7 +264,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
               <div className="grid md:grid-cols-2 gap-8">
                 {/* Ativos */}
                 <div>
-                  <h4 className="font-semibold text-lg mb-4 text-financial-success">Ativos</h4>
+                  <h4 className="font-semibold text-lg mb-4 text-foreground">Ativos</h4>
                   <div className="space-y-3">
                     {data.ativos.map((ativo, index) => (
                       <div key={index} className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors">
@@ -282,7 +282,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                         Nenhum ativo registrado
                       </div>
                     )}
-                    <div className="pt-4 border-t-2 border-financial-success/20 flex justify-between items-center font-bold text-financial-success">
+                    <div className="pt-4 border-t-2 border-financial-success/20 flex justify-between items-center font-bold text-foreground">
                       <span>Total de Ativos</span>
                       <span>{formatCurrency(totalAtivosLista)}</span>
                     </div>
@@ -291,7 +291,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
 
                 {/* Passivos */}
                 <div>
-                  <h4 className="font-semibold text-lg mb-4 text-financial-danger">Passivos</h4>
+                  <h4 className="font-semibold text-lg mb-4 text-foreground">Passivos</h4>
                   <div className="space-y-3">
                     {data.passivos.map((passivo, index) => (
                       <div key={index} className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors">
@@ -309,7 +309,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                         Nenhum passivo registrado
                       </div>
                     )}
-                    <div className="pt-4 border-t-2 border-financial-danger/20 flex justify-between items-center font-bold text-financial-danger">
+                    <div className="pt-4 border-t-2 border-financial-danger/20 flex justify-between items-center font-bold text-foreground">
                       <span>Total de Passivos</span>
                       <span>{formatCurrency(totalPassivosLista)}</span>
                     </div>

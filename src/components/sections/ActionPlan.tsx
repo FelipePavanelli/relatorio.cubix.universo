@@ -86,7 +86,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
       titulo: "Diagnóstico de Alocação",
       descricao: "Análise e reestruturação da alocação de investimentos",
       icone: "📊",
-      cor: "bg-purple-500/10 text-purple-600 border-purple-200",
+      cor: "bg-blue-500/10 text-blue-600 border-blue-200",
       acoes: [
         "Análise da carteira atual",
         "Definição de nova alocação estratégica",
@@ -132,7 +132,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
     },
     {
       titulo: "Corporate (Soluções PJ)",
-      descricao: "Soluções para pessoa jurídica: estrutura, caixa, investimentos e proteção",
+      descricao: "Soluções para PJ: estrutura, caixa, investimentos e proteção",
       icone: "🏢",
       cor: "bg-amber-500/10 text-amber-600 border-amber-200",
       acoes: [

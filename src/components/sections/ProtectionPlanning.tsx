@@ -67,7 +67,7 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
 
   return (
     <section className="py-16 px-4" id="protection">
-      <div className="container mx-auto max-w-5xl">
+      <div className="section-container">
         <div className="mb-12 text-center">
           <div className="inline-block">
             <div className="flex items-center justify-center mb-4">
