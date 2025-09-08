@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import HideableCard from '@/components/ui/HideableCard';
+import { useCardVisibility } from '@/context/CardVisibilityContext';
 import {
   AreaChart,
   LineChart,
@@ -14,11 +16,12 @@ import {
 } from 'recharts';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { ChartContainer } from '@/components/ui/chart';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { getLiquidityEvents, saveLiquidityEvents, LiquidityEventApi } from '@/services/liquidityEventsService';
 
 // Custom currency input component
@@ -27,7 +30,8 @@ const CurrencyInput: React.FC<{
   onChange: (value: number) => void;
   className?: string;
   id?: string;
-}> = ({ value, onChange, className, id }) => {
+  disabled?: boolean;
+}> = ({ value, onChange, className, id, disabled }) => {
   const [displayValue, setDisplayValue] = useState<string>(() => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -60,6 +64,9 @@ const CurrencyInput: React.FC<{
       value={displayValue}
       onChange={handleInputChange}
       className={className}
+      disabled={disabled}
+      readOnly={disabled}
+      aria-readonly={disabled ? true : undefined}
     />
   );
 };
@@ -85,14 +92,22 @@ interface RetirementProjectionChartProps {
     rendaMensal: number;
     idadeAposentadoria: number;
   }) => void;
+  hideControls?: boolean;
 }
 
 interface LiquidityEvent {
   id: string;
   name: string;
-  age: number;
   value: number;
   isPositive: boolean;
+  // Backwards compatibility: some legacy events may have only a single age
+  age?: number;
+  // New recurrence fields
+  recurrence?: 'once' | 'annual' | 'monthly';
+  startAge: number;
+  endAge?: number | null;
+  // Enable/disable support
+  enabled?: boolean;
 }
 
 interface DuracaoCapital {
@@ -107,6 +122,71 @@ function PMT(taxa: number, periodos: number, vp: number, vf: number = 0, tipo: n
   return -(vp * x + vf) * taxa / ((x - 1) * (1 + taxa * tipo));
 }
 
+// Função para calcular o aporte mensal necessário para perpetuidade
+const calculatePerpetuityContribution = (
+  idade_atual: number,
+  idade_para_aposentar: number,
+  capitalDisponivelHoje: number,
+  saque_mensal_desejado: number,
+  rentabilidade_real_liquida_acumulacao: number = 0.03,
+  eventosLiquidez: LiquidityEvent[] = []
+) => {
+  const taxa_mensal_real = Math.pow(1 + rentabilidade_real_liquida_acumulacao, 1 / 12) - 1;
+  const meses_acumulacao = (idade_para_aposentar - idade_atual) * 12;
+
+  if (meses_acumulacao <= 0) return 0;
+
+  // Para perpetuidade, o capital necessário é: saque_mensal / taxa_mensal
+  const capitalNecessarioPerpetuidade = saque_mensal_desejado / taxa_mensal_real;
+
+  // Calculamos o valor futuro do capital disponível hoje
+  const capitalFuturo = capitalDisponivelHoje * Math.pow(1 + taxa_mensal_real, meses_acumulacao);
+
+  // Considere apenas eventos ativos
+  const effectiveEvents = (eventosLiquidez || []).filter(e => e.enabled !== false);
+
+  // Calculamos o valor futuro dos eventos de liquidez (suportando recorrência)
+  let valorFuturoEventos = 0;
+  effectiveEvents.forEach(evento => {
+    const recurrence = evento.recurrence || 'once';
+    const start = evento.startAge ?? evento.age ?? idade_atual;
+    const last = Math.min(evento.endAge ?? (idade_para_aposentar - 1), idade_para_aposentar - 1);
+    const annualAmount = recurrence === 'monthly' ? (evento.value * 12) : evento.value;
+
+    if (recurrence === 'once') {
+      if (start < idade_para_aposentar) {
+        const mesesAteAposentadoria = (idade_para_aposentar - start) * 12;
+        const valorFuturo = annualAmount * Math.pow(1 + taxa_mensal_real, mesesAteAposentadoria);
+        valorFuturoEventos += evento.isPositive ? valorFuturo : -valorFuturo;
+      }
+    } else {
+      for (let a = start; a <= last; a++) {
+        if (a < idade_para_aposentar) {
+          const mesesAteAposentadoria = (idade_para_aposentar - a) * 12;
+          const valorFuturo = annualAmount * Math.pow(1 + taxa_mensal_real, mesesAteAposentadoria);
+          valorFuturoEventos += evento.isPositive ? valorFuturo : -valorFuturo;
+        }
+      }
+    }
+  });
+
+  // Capital total disponível no momento da aposentadoria
+  const capitalTotalDisponivel = capitalFuturo + valorFuturoEventos;
+
+  // Se já temos capital suficiente, retornamos 0
+  if (capitalTotalDisponivel >= capitalNecessarioPerpetuidade) return 0;
+
+  // Calculamos o aporte mensal necessário para complementar
+  const aporteMensal = Math.abs(PMT(
+    taxa_mensal_real,
+    meses_acumulacao,
+    -capitalDisponivelHoje,
+    capitalNecessarioPerpetuidade - valorFuturoEventos
+  ));
+
+  return aporteMensal;
+};
+
 // Função principal de cálculo alinhada com a planilha
 const calculateRetirementProjection = (
   idade_atual: number,
@@ -117,16 +197,24 @@ const calculateRetirementProjection = (
   saque_mensal_desejado: number,
   rentabilidade_real_liquida_acumulacao: number = 0.03,
   rentabilidade_real_liquida_consumo: number = 0.03,
-  eventosLiquidez: LiquidityEvent[] = []
+  eventosLiquidez: LiquidityEvent[] = [],
+  isPerpetuity: boolean = false
 ) => {
+
   // Taxa mensal equivalente (igual à planilha)
   const taxa_mensal_real = Math.pow(1 + rentabilidade_real_liquida_acumulacao, 1 / 12) - 1;
 
   // Cálculo do capital necessário (usando a mesma abordagem da planilha)
   const calculaCapitalNecessario = () => {
-    const meses_consumo = (expectativa_de_vida - idade_para_aposentar) * 12;
-    // Fórmula idêntica à usada na planilha (célula C9 em Apos(2))
-    return (saque_mensal_desejado * (1 - Math.pow(1 + taxa_mensal_real, -meses_consumo)) / taxa_mensal_real);
+    const taxa_mensal_real_consumo = Math.pow(1 + rentabilidade_real_liquida_consumo, 1 / 12) - 1;
+    if (isPerpetuity) {
+      // Para perpetuidade, o capital necessário é: saque_mensal / taxa_mensal (consumo)
+      return saque_mensal_desejado / taxa_mensal_real_consumo;
+    } else {
+      const meses_consumo = (expectativa_de_vida - idade_para_aposentar) * 12;
+      // Fórmula idêntica à usada na planilha (célula C9 em Apos(2)) com taxa de consumo
+      return (saque_mensal_desejado * (1 - Math.pow(1 + taxa_mensal_real_consumo, -meses_consumo)) / taxa_mensal_real_consumo);
+    }
   };
 
   const capitalNecessario = calculaCapitalNecessario();
@@ -142,13 +230,31 @@ const calculateRetirementProjection = (
     // Calculamos o valor futuro do capital disponível hoje
     const capitalFuturo = capitalDisponivelHoje * Math.pow(1 + taxa_mensal_real, meses_acumulacao);
 
-    // Calculamos o valor futuro dos eventos de liquidez
+    // Considere apenas eventos ativos
+    const effectiveEvents = (eventosLiquidez || []).filter(e => e.enabled !== false);
+
+    // Calculamos o valor futuro dos eventos de liquidez (suportando recorrência)
     let valorFuturoEventos = 0;
-    eventosLiquidez.forEach(evento => {
-      if (evento.age < idade_para_aposentar) {
-        const mesesAteAposentadoria = (idade_para_aposentar - evento.age) * 12;
-        const valorFuturo = evento.value * Math.pow(1 + taxa_mensal_real, mesesAteAposentadoria);
-        valorFuturoEventos += evento.isPositive ? valorFuturo : -valorFuturo;
+    effectiveEvents.forEach(evento => {
+      const recurrence = evento.recurrence || 'once';
+      const start = evento.startAge ?? evento.age ?? idade_atual;
+      const last = Math.min(evento.endAge ?? (idade_para_aposentar - 1), idade_para_aposentar - 1);
+      const annualAmount = recurrence === 'monthly' ? (evento.value * 12) : evento.value;
+
+      if (recurrence === 'once') {
+        if (start < idade_para_aposentar) {
+          const mesesAteAposentadoria = (idade_para_aposentar - start) * 12;
+          const valorFuturo = annualAmount * Math.pow(1 + taxa_mensal_real, mesesAteAposentadoria);
+          valorFuturoEventos += evento.isPositive ? valorFuturo : -valorFuturo;
+        }
+      } else {
+        for (let a = start; a <= last; a++) {
+          if (a < idade_para_aposentar) {
+            const mesesAteAposentadoria = (idade_para_aposentar - a) * 12;
+            const valorFuturo = annualAmount * Math.pow(1 + taxa_mensal_real, mesesAteAposentadoria);
+            valorFuturoEventos += evento.isPositive ? valorFuturo : -valorFuturo;
+          }
+        }
       }
     });
 
@@ -174,30 +280,84 @@ const calculateRetirementProjection = (
   // Simulação do fluxo de capital (ajustado para a lógica da planilha)
   const simularFluxoCapital = () => {
     const fluxo = [];
+    const fluxoCaixaAnual: Array<{
+      idade: number;
+      fase: 'Acumulação' | 'Consumo';
+      capitalInicial: number;
+      eventos: number;
+      aporte: number;
+      rendimento: number;
+      saque: number;
+      capitalFinal: number;
+    }> = [];
     let capital = capitalDisponivelHoje;
     let idade = idade_atual;
 
-    // Ordena os eventos por idade para garantir a ordem correta
-    const eventosOrdenados = [...eventosLiquidez].sort((a, b) => a.age - b.age);
+    // Considere apenas eventos ativos
+    const effectiveEvents = (eventosLiquidez || []).filter(e => e.enabled !== false);
+
+    // Pré-processa eventos por idade considerando recorrência
+    const eventsByAge = new Map<number, number>();
+    effectiveEvents.forEach(evento => {
+      const recurrence = evento.recurrence || 'once';
+      const start = evento.startAge ?? evento.age ?? idade_atual;
+      const maxAge = isPerpetuity ? 120 : expectativa_de_vida;
+      const last = Math.min(evento.endAge ?? maxAge, maxAge);
+      const annualAmount = recurrence === 'monthly' ? (evento.value * 12) : evento.value;
+
+      if (recurrence === 'once') {
+        const delta = (evento.isPositive ? 1 : -1) * annualAmount;
+        eventsByAge.set(start, (eventsByAge.get(start) || 0) + delta);
+      } else {
+        for (let a = start; a <= last; a++) {
+          const delta = (evento.isPositive ? 1 : -1) * annualAmount;
+          eventsByAge.set(a, (eventsByAge.get(a) || 0) + delta);
+        }
+      }
+    });
 
     // Fase de acumulação
     while (idade < idade_para_aposentar) {
-      // Aplica eventos de liquidez no ano atual
-      const eventosAno = eventosOrdenados.filter(e => e.age === idade);
-      eventosAno.forEach(evento => {
-        capital += evento.isPositive ? evento.value : -evento.value;
-      });
+      const capitalInicial = capital;
 
-      // Registra o capital após os eventos
+      // Aplica eventos de liquidez no ano atual (já agregados por idade)
+      const delta = eventsByAge.get(idade) || 0;
+      capital += delta;
+
+      // Registra o capital após os eventos (para o gráfico)
       fluxo.push({ idade, capital });
 
-      // Rendimento anual
-      const rendimento = capital * rentabilidade_real_liquida_acumulacao;
-      // Aporte anual
-      const aporteAnual = aporteMensal * 12;
+      // Capitalização mensal equivalente para 12 meses
+      const taxaMensalReal = Math.pow(1 + rentabilidade_real_liquida_acumulacao, 1 / 12) - 1;
+      const fatorAnual = Math.pow(1 + taxaMensalReal, 12);
 
-      // Atualiza o capital com rendimento e aporte
-      capital = capital + rendimento + aporteAnual;
+      // Aportes mensais ao longo do ano (valor futuro no fim dos 12 meses)
+      const aporteAnual = aporteMensal * 12;
+      const fvAportes = taxaMensalReal === 0
+        ? aporteAnual
+        : aporteMensal * ((fatorAnual - 1) / taxaMensalReal);
+
+      // Rendimento separando capital inicial e crescimento sobre os aportes do ano
+      const rendimentoCapital = capital * (fatorAnual - 1);
+      const rendimentoAportes = fvAportes - aporteAnual;
+      const rendimentoTotal = rendimentoCapital + rendimentoAportes;
+
+      // Atualiza o capital com rendimento total e o aporte efetivado no ano
+      const capitalFinal = capital + aporteAnual + rendimentoTotal;
+
+      // Registra no fluxo de caixa
+      fluxoCaixaAnual.push({
+        idade,
+        fase: 'Acumulação',
+        capitalInicial,
+        eventos: delta,
+        aporte: aporteAnual,
+        rendimento: rendimentoTotal,
+        saque: 0,
+        capitalFinal
+      });
+
+      capital = capitalFinal;
       idade++;
     }
 
@@ -205,46 +365,128 @@ const calculateRetirementProjection = (
     const saqueAnual = saque_mensal_desejado * 12;
     let idadeEsgotamento = null;
 
-    while (idade <= expectativa_de_vida) {
-      // Aplica eventos de liquidez no ano atual
-      const eventosAno = eventosOrdenados.filter(e => e.age === idade);
-      eventosAno.forEach(evento => {
-        capital += evento.isPositive ? evento.value : -evento.value;
-      });
+    if (isPerpetuity) {
+      // Para perpetuidade, simulamos até uma idade bem alta (120 anos)
+      const idadeMaxima = 120;
+      while (idade <= idadeMaxima) {
+        const capitalInicial = capital;
 
-      // Registra o capital após os eventos
-      fluxo.push({ idade, capital: capital > 0 ? capital : 0 });
+        // Aplica eventos de liquidez no ano atual (agregados)
+        const delta = eventsByAge.get(idade) || 0;
+        capital += delta;
 
-      if (capital <= 0) {
-        if (idadeEsgotamento === null) idadeEsgotamento = idade;
+        // Registra o capital após os eventos (para o gráfico)
+        fluxo.push({ idade, capital: capital > 0 ? capital : 0 });
+
+        // Capitalização mensal equivalente na fase de consumo
+        const taxaMensalConsumo = Math.pow(1 + rentabilidade_real_liquida_consumo, 1 / 12) - 1;
+        const fatorAnualConsumo = Math.pow(1 + taxaMensalConsumo, 12);
+        const saqueMensal = saque_mensal_desejado;
+        const fvSaques = taxaMensalConsumo === 0
+          ? saqueMensal * 12
+          : saqueMensal * ((fatorAnualConsumo - 1) / taxaMensalConsumo);
+
+        const rendimentoCapital = capital * (fatorAnualConsumo - 1);
+        let saqueEfetivo = fvSaques; // valor futuro dos 12 saques mensais
+        let capitalFinal = capital + rendimentoCapital - saqueEfetivo;
+
+        // Se o capital ficaria negativo, limitamos o saque do último ano para zerar
+        if (capitalFinal < 0) {
+          saqueEfetivo = Math.max(0, capital + rendimentoCapital);
+          capitalFinal = 0;
+          if (idadeEsgotamento === null) idadeEsgotamento = idade;
+        }
+
+        fluxoCaixaAnual.push({
+          idade,
+          fase: 'Consumo',
+          capitalInicial,
+          eventos: delta,
+          aporte: 0,
+          rendimento: rendimentoCapital,
+          saque: saqueEfetivo,
+          capitalFinal
+        });
+
+        capital = capitalFinal;
         idade++;
-        continue;
       }
+    } else {
+      while (idade <= expectativa_de_vida) {
+        const capitalInicial = capital;
 
-      // Rendimento durante a fase de consumo
-      const rendimento = capital * rentabilidade_real_liquida_consumo;
-      capital = capital + rendimento - saqueAnual;
-      idade++;
+        // Aplica eventos de liquidez no ano atual (agregados)
+        const delta = eventsByAge.get(idade) || 0;
+        capital += delta;
+
+        // Registra o capital após os eventos (para o gráfico)
+        fluxo.push({ idade, capital: capital > 0 ? capital : 0 });
+
+        if (capital <= 0) {
+          if (idadeEsgotamento === null) idadeEsgotamento = idade;
+          fluxoCaixaAnual.push({
+            idade,
+            fase: 'Consumo',
+            capitalInicial,
+            eventos: delta,
+            aporte: 0,
+            rendimento: 0,
+            saque: saque_mensal_desejado * 12,
+            capitalFinal: capital
+          });
+          idade++;
+          continue;
+        }
+
+        // Capitalização mensal equivalente na fase de consumo
+        const taxaMensalConsumo = Math.pow(1 + rentabilidade_real_liquida_consumo, 1 / 12) - 1;
+        const fatorAnualConsumo = Math.pow(1 + taxaMensalConsumo, 12);
+        const saqueMensal = saque_mensal_desejado;
+        const fvSaques = taxaMensalConsumo === 0
+          ? saqueMensal * 12
+          : saqueMensal * ((fatorAnualConsumo - 1) / taxaMensalConsumo);
+
+        const rendimentoCapital = capital * (fatorAnualConsumo - 1);
+        let saqueEfetivo = fvSaques; // valor futuro dos 12 saques mensais
+        let capitalFinal = capital + rendimentoCapital - saqueEfetivo;
+
+        // Se o capital ficaria negativo, limitamos o saque do último ano para zerar
+        if (capitalFinal < 0) {
+          saqueEfetivo = Math.max(0, capital + rendimentoCapital);
+          capitalFinal = 0;
+          if (idadeEsgotamento === null) idadeEsgotamento = idade;
+        }
+
+        fluxoCaixaAnual.push({
+          idade,
+          fase: 'Consumo',
+          capitalInicial,
+          eventos: delta,
+          aporte: 0,
+          rendimento: rendimentoCapital,
+          saque: saqueEfetivo,
+          capitalFinal
+        });
+
+        capital = capitalFinal;
+        idade++;
+      }
     }
 
-    return { fluxo, idadeEsgotamento };
+    return { fluxo, fluxoCaixaAnual, idadeEsgotamento };
   };
 
   const resultado = simularFluxoCapital();
   const fluxoCapital = resultado.fluxo;
+  const idadeEsgotamento = resultado.idadeEsgotamento;
+  const fluxoCaixaAnual = resultado.fluxoCaixaAnual;
 
   return {
-    fluxoCapital,
-    idadeAposentadoria: idade_para_aposentar,
     capitalNecessario,
     aporteMensal,
-    duracaoCapital: {
-      idadeFinal: resultado.idadeEsgotamento || expectativa_de_vida,
-      duracaoAnos: resultado.idadeEsgotamento ?
-        resultado.idadeEsgotamento - idade_para_aposentar :
-        expectativa_de_vida - idade_para_aposentar
-    },
-    idadeEsgotamento: resultado.idadeEsgotamento
+    fluxoCapital,
+    fluxoCaixaAnual,
+    idadeEsgotamento
   };
 };
 
@@ -267,12 +509,16 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   rendaMensalDesejada,
   safeWithdrawalRate,
   inflationRate,
-  onProjectionChange
+  onProjectionChange,
+  scenarios,
+  hideControls
 }) => {
-  const [selectedView, setSelectedView] = useState<'completo' | '10anos' | '20anos' | '30anos'>('completo');
+  const { isCardVisible, toggleCardVisibility } = useCardVisibility();
+  // Removed selectedView state since we only show the complete scenario
   const [taxaRetorno, setTaxaRetorno] = useState<number>(0.03); // 3% real ao ano como na planilha
   const [rendaMensal, setRendaMensal] = useState<number>(rendaMensalDesejada);
   const [idadeAposentadoria, setIdadeAposentadoria] = useState<number>(retirementAge);
+  const [isPerpetuity, setIsPerpetuity] = useState<boolean>(false);
   const [aporteMensal, setAporteMensal] = useState<number>(() => {
     const result = calculateRetirementProjection(
       currentAge,
@@ -283,15 +529,85 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       rendaMensalDesejada,
       0.03,
       0.03,
-      []
+      [],
+      false
     );
     return result.aporteMensal;
   });
   const [liquidityEvents, setLiquidityEvents] = useState<LiquidityEvent[]>([]);
   const [newEventName, setNewEventName] = useState<string>('');
-  const [newEventAge, setNewEventAge] = useState<number>(currentAge + 5);
   const [newEventValue, setNewEventValue] = useState<number>(0);
   const [newEventType, setNewEventType] = useState<'positive' | 'negative'>('positive');
+
+  // Função para obter o session_id da URL
+  const getSessionId = (): string | null => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('sessionId');
+  };
+
+  // Carregar eventos de liquidez da API ao montar o componente
+  useEffect(() => {
+    const loadLiquidityEvents = async () => {
+      const sessionId = getSessionId();
+      if (!sessionId) return;
+
+      try {
+        const apiEvents = await getLiquidityEvents(sessionId);
+        const events: LiquidityEvent[] = apiEvents.map((event, index) => ({
+          id: `event-${index}`,
+          name: event.nome,
+          age: Number(event.idade),
+          startAge: Number(event.idade),
+          value: Number(event.valor),
+          isPositive: event.tipo === 'entrada',
+          recurrence: 'once',
+          endAge: null,
+          enabled: true
+        }));
+        setLiquidityEvents(events);
+      } catch (error) {
+        console.error('Error loading liquidity events:', error);
+      }
+    };
+
+    loadLiquidityEvents();
+  }, []);
+
+  // Recalcular projeção sempre que os eventos de liquidez mudarem
+  useEffect(() => {
+    const result = calculateRetirementProjection(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteMensal,
+      rendaMensal,
+      taxaRetorno,
+      taxaRetorno,
+      liquidityEvents,
+      isPerpetuity
+    );
+
+    setAporteMensal(result.aporteMensal);
+    setProjection({
+      ...result,
+      fluxoCapital: result.fluxoCapital.map(item => ({
+        age: item.idade,
+        capital: Math.round(item.capital)
+      }))
+    });
+  }, [liquidityEvents, currentAge, idadeAposentadoria, lifeExpectancy, currentPortfolio, rendaMensal, taxaRetorno, isPerpetuity]);
+
+  const [newEventRecurrence, setNewEventRecurrence] = useState<'once' | 'annual' | 'monthly'>('once');
+  const [newEventStartAge, setNewEventStartAge] = useState<number>(currentAge + 5);
+  const [newEventEndAge, setNewEventEndAge] = useState<number | ''>('');
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editValue, setEditValue] = useState<number>(0);
+  const [editType, setEditType] = useState<'positive' | 'negative'>('positive');
+  const [editRecurrence, setEditRecurrence] = useState<'once' | 'annual' | 'monthly'>('once');
+  const [editStartAge, setEditStartAge] = useState<number>(currentAge + 1);
+  const [editEndAge, setEditEndAge] = useState<number | ''>('');
   const [projection, setProjection] = useState(() => {
     const result = calculateRetirementProjection(
       currentAge,
@@ -302,7 +618,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       rendaMensalDesejada,
       0.03,
       0.03,
-      []
+      [],
+      false
     );
     return {
       ...result,
@@ -313,124 +630,73 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     };
   });
 
-  // Função para obter o session_id da URL
-  const getSessionId = () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('sessionId');
-  };
-
-  // Buscar eventos da API ao montar
-  useEffect(() => {
-    const fetchEvents = async () => {
-      const sessionId = getSessionId();
-      if (!sessionId) return;
-      try {
-        const apiEvents = await getLiquidityEvents(sessionId);
-        // Adaptar para o formato local
-        const localEvents = apiEvents.map(e => ({
-          id: `${e.session_id || ''}-${e.nome}-${e.idade}`,
-          name: e.nome,
-          age: e.idade,
-          value: Number(e.valor),
-          isPositive: e.tipo === 'entrada',
-        }));
-        setLiquidityEvents(localEvents);
-
-        // Atualiza projeção e aporteMensal com os eventos carregados
-        const result = calculateRetirementProjection(
-          currentAge,
-          retirementAge,
-          lifeExpectancy,
-          currentPortfolio,
-          monthlyContribution,
-          rendaMensalDesejada,
-          0.03,
-          0.03,
-          localEvents
-        );
-        setAporteMensal(result.aporteMensal);
-        setProjection({
-          ...result,
-          fluxoCapital: result.fluxoCapital.map(item => ({
-            age: item.idade,
-            capital: Math.round(item.capital)
-          }))
-        });
-      } catch (err) {
-        // fallback: nenhum evento
-        setLiquidityEvents([]);
-      }
-    };
-    fetchEvents();
-  }, []);
-
   // Atualizar API ao adicionar/remover evento
   const syncEventsToApi = async (events: LiquidityEvent[]) => {
     const sessionId = getSessionId();
     if (!sessionId) return;
-    let apiEvents: LiquidityEventApi[];
-    if (events.length === 0) {
-      // Se não houver eventos, envie apenas o session_id
-      apiEvents = [{ session_id: sessionId } as LiquidityEventApi];
-    } else {
-      apiEvents = events.map(e => ({
-        session_id: sessionId,
-        nome: e.name,
-        idade: e.age,
-        tipo: e.isPositive ? 'entrada' : 'saida',
-        valor: e.value,
-      }));
+
+    try {
+      let apiEvents: LiquidityEventApi[];
+      if (events.length === 0) {
+        // Se não houver eventos, envie apenas o session_id
+        apiEvents = [{ session_id: sessionId } as LiquidityEventApi];
+      } else {
+        apiEvents = events.map(e => ({
+          session_id: sessionId,
+          nome: e.name,
+          idade: e.startAge ?? e.age ?? currentAge + 1,
+          tipo: e.isPositive ? 'entrada' : 'saida',
+          valor: e.value,
+        }));
+      }
+      await saveLiquidityEvents(apiEvents);
+    } catch (error) {
+      console.error('Error syncing liquidity events:', error);
     }
-    await saveLiquidityEvents(apiEvents);
   };
 
-  // Adicionar evento
   const handleAddLiquidityEvent = async () => {
-    if (!newEventName || newEventAge < currentAge || newEventValue <= 0) return;
+    const startAge = newEventStartAge;
+    const endAge = newEventRecurrence === 'once' ? undefined : (newEventEndAge === '' ? undefined : Number(newEventEndAge));
+    if (!newEventName || startAge < currentAge || newEventValue <= 0) return;
+    if (endAge !== undefined && endAge < startAge) return;
+
     const newEvent: LiquidityEvent = {
       id: Date.now().toString(),
       name: newEventName,
-      age: newEventAge,
       value: newEventValue,
-      isPositive: newEventType === 'positive'
+      isPositive: newEventType === 'positive',
+      recurrence: newEventRecurrence,
+      startAge: startAge,
+      endAge: endAge ?? null,
+      enabled: true
     };
+
     const updatedEvents = [...liquidityEvents, newEvent];
     setLiquidityEvents(updatedEvents);
     setNewEventName('');
-    setNewEventAge(currentAge + 5);
+    setNewEventStartAge(currentAge + 5);
+    setNewEventEndAge('');
     setNewEventValue(0);
     setNewEventType('positive');
+    setNewEventRecurrence('once');
+
+    // Sincroniza com a API
     await syncEventsToApi(updatedEvents);
-    // Recalcula a projeção com os novos valores
-    const result = calculateRetirementProjection(
-      currentAge,
-      idadeAposentadoria,
-      lifeExpectancy,
-      currentPortfolio,
-      aporteMensal,
-      rendaMensal,
-      taxaRetorno,
-      taxaRetorno,
-      updatedEvents
-    );
-    setAporteMensal(result.aporteMensal);
-    setProjection({
-      ...result,
-      fluxoCapital: result.fluxoCapital.map(item => ({
-        age: item.idade,
-        capital: Math.round(item.capital)
-      }))
-    });
   };
 
-  // Remover evento
   const handleRemoveLiquidityEvent = async (id: string) => {
-    // Filtra os eventos que restaram após a remoção
     const updatedEvents = liquidityEvents.filter(event => event.id !== id);
-    // Envia para a API apenas os eventos que ainda estão preenchidos
-    await syncEventsToApi(updatedEvents);
     setLiquidityEvents(updatedEvents);
-    // Recalcula a projeção com os eventos restantes
+
+    // Sincroniza com a API
+    await syncEventsToApi(updatedEvents);
+  };
+
+  const handleToggleLiquidityEvent = async (id: string, enabled: boolean) => {
+    const updatedEvents = liquidityEvents.map(ev => ev.id === id ? { ...ev, enabled } : ev);
+    setLiquidityEvents(updatedEvents);
+
     const result = calculateRetirementProjection(
       currentAge,
       idadeAposentadoria,
@@ -440,7 +706,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       rendaMensal,
       taxaRetorno,
       taxaRetorno,
-      updatedEvents
+      updatedEvents,
+      isPerpetuity
     );
     setAporteMensal(result.aporteMensal);
     setProjection({
@@ -450,6 +717,71 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
         capital: Math.round(item.capital)
       }))
     });
+
+    // Sincroniza com a API
+    await syncEventsToApi(updatedEvents);
+  };
+
+  const startEditLiquidityEvent = (ev: LiquidityEvent) => {
+    setEditingEventId(ev.id);
+    setEditName(ev.name);
+    setEditValue(ev.value);
+    setEditType(ev.isPositive ? 'positive' : 'negative');
+    setEditRecurrence(ev.recurrence || 'once');
+    setEditStartAge(ev.startAge ?? ev.age ?? currentAge + 1);
+    setEditEndAge(ev.endAge == null ? '' : ev.endAge);
+  };
+
+  const saveEditLiquidityEvent = async () => {
+    if (!editingEventId) return;
+    const startAge = editStartAge;
+    const endAge = editRecurrence === 'once' ? undefined : (editEndAge === '' ? undefined : Number(editEndAge));
+    if (!editName || startAge < currentAge || editValue <= 0) return;
+    if (endAge !== undefined && endAge < startAge) return;
+
+    const updatedEvents = liquidityEvents.map(ev => {
+      if (ev.id !== editingEventId) return ev;
+      return {
+        ...ev,
+        name: editName,
+        value: editValue,
+        isPositive: editType === 'positive',
+        recurrence: editRecurrence,
+        startAge: startAge,
+        endAge: endAge ?? null
+      };
+    });
+
+    setLiquidityEvents(updatedEvents);
+    setEditingEventId(null);
+
+    const result = calculateRetirementProjection(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteMensal,
+      rendaMensal,
+      taxaRetorno,
+      taxaRetorno,
+      updatedEvents,
+      isPerpetuity
+    );
+    setAporteMensal(result.aporteMensal);
+    setProjection({
+      ...result,
+      fluxoCapital: result.fluxoCapital.map(item => ({
+        age: item.idade,
+        capital: Math.round(item.capital)
+      }))
+    });
+
+    // Sincroniza com a API
+    await syncEventsToApi(updatedEvents);
+  };
+
+  const cancelEditLiquidityEvent = () => {
+    setEditingEventId(null);
   };
 
   useEffect(() => {
@@ -474,15 +806,30 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   }, [currentAge, lifeExpectancy]);
 
   const filteredData = React.useMemo(() => {
-    if (selectedView === '10anos') {
-      return projection.fluxoCapital.filter(item => item.age <= currentAge + 10);
-    } else if (selectedView === '20anos') {
-      return projection.fluxoCapital.filter(item => item.age <= currentAge + 20);
-    } else if (selectedView === '30anos') {
-      return projection.fluxoCapital.filter(item => item.age <= currentAge + 30);
-    }
+    // Always show complete scenario
     return projection.fluxoCapital;
-  }, [projection.fluxoCapital, selectedView, currentAge]);
+  }, [projection.fluxoCapital]);
+
+  const eventsByAge = React.useMemo(() => {
+    const map = new Map<number, any[]>();
+    (liquidityEvents || [])
+      .filter((e: any) => e && e.enabled !== false)
+      .forEach((e: any) => {
+        const age = (e.startAge ?? e.age) as number;
+        if (!map.has(age)) map.set(age, []);
+        map.get(age)!.push(e);
+      });
+    return map;
+  }, [liquidityEvents]);
+
+  const isEventActiveAtAge = React.useCallback((e: any, age: number) => {
+    const start = e.startAge ?? e.age;
+    const end = e.endAge ?? start;
+    const recurrence = e.recurrence || 'once';
+    if (recurrence === 'once') return age === start;
+    // Para anual/mensal consideramos ativo em qualquer ano dentro do intervalo
+    return age >= start && age <= end;
+  }, []);
 
   const formatYAxis = (value: number) => {
     if (value === 0) return 'R$ 0';
@@ -494,89 +841,61 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     <Card className="w-full h-full border-border/80 shadow-sm">
       <CardHeader className="px-6 pb-0">
         <div className="flex flex-col w-full gap-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between w-full">
-            <div>
-              <CardTitle className="text-xl font-semibold">Cenário de Aposentadoria</CardTitle>
-              <CardDescription className="mt-1">
-                Evolução do patrimônio no prazo desejado (alinhado com a planilha)
-              </CardDescription>
-            </div>
-            <ToggleGroup
-              type="single"
-              value={selectedView}
-              onValueChange={(value) => {
-                if (value) {
-                  setSelectedView(value as 'completo' | '10anos' | '20anos' | '30anos');
+          <div className="w-full">
+            <CardTitle className="text-xl font-semibold">
+              Cenário de Aposentadoria {isPerpetuity && "(Perpetuidade)"}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {isPerpetuity ?
+                "Patrimônio perpétuo - apenas os rendimentos são consumidos" :
+                "Evolução do patrimônio no prazo desejado (alinhado com a planilha)"
+              }
+            </CardDescription>
+          </div>
 
-                  // Define a nova idade de aposentadoria baseada no cenário selecionado
-                  let novaIdadeAposentadoria = retirementAge;
-                  if (value === '10anos') {
-                    novaIdadeAposentadoria = currentAge + 10;
-                  } else if (value === '20anos') {
-                    novaIdadeAposentadoria = currentAge + 20;
-                  } else if (value === '30anos') {
-                    novaIdadeAposentadoria = currentAge + 30;
-                  }
-
-                  setIdadeAposentadoria(novaIdadeAposentadoria);
-
-                  // Recalcula a projeção com os novos valores
-                  const result = calculateRetirementProjection(
-                    currentAge,
-                    novaIdadeAposentadoria,
-                    lifeExpectancy,
-                    currentPortfolio,
-                    aporteMensal,
-                    rendaMensal,
-                    taxaRetorno,
-                    taxaRetorno,
-                    liquidityEvents
-                  );
-
-                  // Atualiza o aporte mensal com o valor calculado
-                  setAporteMensal(result.aporteMensal);
-
-                  // Atualiza o gráfico com os novos dados
-                  setProjection({
-                    ...result,
-                    fluxoCapital: result.fluxoCapital.map(item => ({
-                      age: item.idade,
-                      capital: Math.round(item.capital)
-                    }))
-                  });
+          {/* Toggle de Perpetuidade */}
+          <div className="flex items-center justify-between mb-4 p-3 bg-muted/30 rounded-lg">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Modo Perpetuidade</Label>
+              <p className="text-xs text-muted-foreground">
+                {isPerpetuity ?
+                  "Patrimônio nunca se esgota - apenas os rendimentos são consumidos" :
+                  "Patrimônio finito - pode se esgotar durante a aposentadoria"
                 }
+              </p>
+            </div>
+            <Switch
+              checked={isPerpetuity}
+              onCheckedChange={(checked) => {
+                setIsPerpetuity(checked);
+
+                // Recalcula a projeção com o novo modo
+                const result = calculateRetirementProjection(
+                  currentAge,
+                  idadeAposentadoria,
+                  lifeExpectancy,
+                  currentPortfolio,
+                  aporteMensal,
+                  rendaMensal,
+                  taxaRetorno,
+                  taxaRetorno,
+                  liquidityEvents,
+                  checked
+                );
+
+                // Atualiza o aporte mensal com o valor calculado
+                setAporteMensal(result.aporteMensal);
+
+                // Atualiza o gráfico com os novos dados
+                setProjection({
+                  ...result,
+                  fluxoCapital: result.fluxoCapital.map(item => ({
+                    age: item.idade,
+                    capital: Math.round(item.capital)
+                  }))
+                });
               }}
-              className="bg-muted/30 p-1 rounded-lg"
-            >
-              <ToggleGroupItem
-                value="completo"
-                size="sm"
-                className="text-xs px-3 py-1.5 rounded bg-transparent hover:bg-muted/50"
-              >
-                Completo
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="10anos"
-                size="sm"
-                className="text-xs px-3 py-1.5 rounded bg-transparent hover:bg-muted/50"
-              >
-                10 Anos
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="20anos"
-                size="sm"
-                className="text-xs px-3 py-1.5 rounded bg-transparent hover:bg-muted/50"
-              >
-                20 Anos
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="30anos"
-                size="sm"
-                className="text-xs px-3 py-1.5 rounded bg-transparent hover:bg-muted/50"
-              >
-                30 Anos
-              </ToggleGroupItem>
-            </ToggleGroup>
+            />
           </div>
 
           <div className="grid md:grid-cols-4 gap-4 mb-6">
@@ -603,7 +922,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       rendaMensal,
                       newTaxaRetorno,
                       newTaxaRetorno,
-                      liquidityEvents
+                      liquidityEvents,
+                      isPerpetuity
                     );
 
                     // Atualiza o aporte mensal com o valor calculado
@@ -628,50 +948,13 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="aporteMensal">Aporte Mensal</Label>
+              <Label htmlFor="aporteMensal">Aporte Mensal (calculado)</Label>
               <CurrencyInput
                 id="aporteMensal"
                 value={aporteMensal}
-                onChange={(value) => {
-                  setAporteMensal(value);
-
-                  // Calcula o capital acumulado na idade de aposentadoria
-                  const mesesAcumulacao = (idadeAposentadoria - currentAge) * 12;
-                  const taxaMensal = Math.pow(1 + taxaRetorno, 1 / 12) - 1;
-
-                  // FV = PV * (1 + i)^n + PMT * ((1 + i)^n - 1) / i
-                  const capitalAcumulado = currentPortfolio * Math.pow(1 + taxaMensal, mesesAcumulacao) +
-                    value * (Math.pow(1 + taxaMensal, mesesAcumulacao) - 1) / taxaMensal;
-
-                  // Calcula a renda mensal que pode ser sustentada com esse capital
-                  const mesesConsumo = (lifeExpectancy - idadeAposentadoria) * 12;
-                  const rendaMensalCalculada = capitalAcumulado * taxaMensal / (1 - Math.pow(1 + taxaMensal, -mesesConsumo));
-
-                  setRendaMensal(Math.round(rendaMensalCalculada));
-
-                  // Recalcula a projeção com os novos valores
-                  const result = calculateRetirementProjection(
-                    currentAge,
-                    idadeAposentadoria,
-                    lifeExpectancy,
-                    currentPortfolio,
-                    value,
-                    Math.round(rendaMensalCalculada),
-                    taxaRetorno,
-                    taxaRetorno,
-                    liquidityEvents
-                  );
-
-                  // Atualiza o gráfico com os novos dados
-                  setProjection({
-                    ...result,
-                    fluxoCapital: result.fluxoCapital.map(item => ({
-                      age: item.idade,
-                      capital: Math.round(item.capital)
-                    }))
-                  });
-                }}
+                onChange={() => { /* bloqueado */ }}
                 className="h-9"
+                disabled
               />
             </div>
 
@@ -693,7 +976,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     value,
                     taxaRetorno,
                     taxaRetorno,
-                    liquidityEvents
+                    liquidityEvents,
+                    isPerpetuity
                   );
 
                   // Atualiza o aporte mensal com o valor calculado
@@ -710,6 +994,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 }}
                 className="h-9"
               />
+              <p className="text-[11px] text-muted-foreground">Objetivo registrado: {formatCurrency(rendaMensalDesejada)}</p>
             </div>
 
             <div className="space-y-2">
@@ -732,7 +1017,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     rendaMensal,
                     taxaRetorno,
                     taxaRetorno,
-                    liquidityEvents
+                    liquidityEvents,
+                    isPerpetuity
                   );
 
                   // Atualiza o aporte mensal com o valor calculado
@@ -751,6 +1037,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 max={90}
                 className="h-9"
               />
+              <p className="text-[11px] text-muted-foreground">Objetivo registrado: {retirementAge} anos</p>
             </div>
           </div>
 
@@ -767,35 +1054,127 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
               <thead className="bg-muted/30">
                 <tr>
                   <th className="py-2 px-3 text-left font-medium">Evento</th>
-                  <th className="py-2 px-3 text-center font-medium">Idade</th>
+                  <th className="py-2 px-3 text-center font-medium">Início</th>
+                  <th className="py-2 px-3 text-center font-medium">Término</th>
+                  <th className="py-2 px-3 text-center font-medium">Recorrência</th>
                   <th className="py-2 px-3 text-center font-medium">Tipo</th>
                   <th className="py-2 px-3 text-right font-medium">Valor</th>
+                  <th className="py-2 px-3 text-center font-medium">Ativo</th>
                   <th className="py-2 px-3 text-center font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {liquidityEvents.map(event => (
-                  <tr key={event.id}>
-                    <td className="py-2 px-3">{event.name}</td>
-                    <td className="py-2 px-3 text-center">{event.age} anos</td>
-                    <td className="py-2 px-3 text-center">
-                      <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium ${event.isPositive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {event.isPositive ? 'Entrada' : 'Saída'}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-right font-medium">
-                      {formatCurrency(event.value)}
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      <button
-                        onClick={() => handleRemoveLiquidityEvent(event.id)}
-                        className="text-red-500 hover:text-red-700"
-                        title="Remover evento"
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
+                  editingEventId === event.id ? (
+                    <tr key={event.id} className="bg-accent/10">
+                      <td className="py-2 px-3">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <Input
+                          type="number"
+                          value={editStartAge}
+                          onChange={(e) => setEditStartAge(parseInt(e.target.value) || currentAge + 1)}
+                          min={currentAge}
+                          max={90}
+                          className="h-8 text-xs w-20 mx-auto text-center"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <Input
+                          type="number"
+                          value={editRecurrence === 'once' ? '' : editEndAge}
+                          onChange={(e) => setEditEndAge(e.target.value === '' ? '' : (parseInt(e.target.value) || currentAge + 1))}
+                          min={currentAge}
+                          max={90}
+                          className="h-8 text-xs w-20 mx-auto text-center"
+                          disabled={editRecurrence === 'once'}
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <select
+                          value={editRecurrence}
+                          onChange={(e) => setEditRecurrence(e.target.value as 'once' | 'annual' | 'monthly')}
+                          className="h-8 text-xs rounded-md border border-input bg-background px-2"
+                        >
+                          <option value="once">Única</option>
+                          <option value="annual">Anual</option>
+                          <option value="monthly">Mensal</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <select
+                          value={editType}
+                          onChange={(e) => setEditType(e.target.value as 'positive' | 'negative')}
+                          className="h-8 text-xs rounded-md border border-input bg-background px-2"
+                        >
+                          <option value="positive">Entrada</option>
+                          <option value="negative">Saída</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <CurrencyInput
+                          value={editValue}
+                          onChange={(value) => setEditValue(value)}
+                          className="h-8 text-xs w-28 ml-auto"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">-</td>
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={saveEditLiquidityEvent}
+                            className="text-green-600 hover:text-green-800 text-xs font-medium"
+                          >Salvar</button>
+                          <button
+                            onClick={cancelEditLiquidityEvent}
+                            className="text-muted-foreground hover:text-foreground text-xs"
+                          >Cancelar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={event.id}>
+                      <td className="py-2 px-3">{event.name}</td>
+                      <td className="py-2 px-3 text-center">{event.startAge ?? event.age} anos</td>
+                      <td className="py-2 px-3 text-center">{event.endAge != null ? `${event.endAge} anos` : '-'}</td>
+                      <td className="py-2 px-3 text-center">{(event.recurrence || 'once') === 'once' ? 'Única' : (event.recurrence === 'annual' ? 'Anual' : 'Mensal')}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium ${event.isPositive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {event.isPositive ? 'Entrada' : 'Saída'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right font-medium">
+                        {formatCurrency(event.value)}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <Switch
+                          checked={event.enabled !== false}
+                          onCheckedChange={(checked) => handleToggleLiquidityEvent(event.id, checked)}
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => startEditLiquidityEvent(event)}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Editar"
+                          >✎</button>
+                          <button
+                            onClick={() => handleRemoveLiquidityEvent(event.id)}
+                            className="text-red-500 hover:text-red-700"
+                            title="Remover evento"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
                 ))}
 
                 {/* Formulário para adicionar novo evento */}
@@ -811,12 +1190,34 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   <td className="py-2 px-3 text-center">
                     <Input
                       type="number"
-                      value={newEventAge}
-                      onChange={(e) => setNewEventAge(parseInt(e.target.value) || currentAge + 1)}
+                      value={newEventStartAge}
+                      onChange={(e) => setNewEventStartAge(parseInt(e.target.value) || currentAge + 1)}
                       min={currentAge}
                       max={90}
                       className="h-8 text-xs w-20 mx-auto text-center"
                     />
+                  </td>
+                  <td className="py-2 px-3 text-center">
+                    <Input
+                      type="number"
+                      value={newEventRecurrence === 'once' ? '' : newEventEndAge}
+                      onChange={(e) => setNewEventEndAge(e.target.value === '' ? '' : (parseInt(e.target.value) || currentAge + 1))}
+                      min={currentAge}
+                      max={90}
+                      className="h-8 text-xs w-20 mx-auto text-center"
+                      disabled={newEventRecurrence === 'once'}
+                    />
+                  </td>
+                  <td className="py-2 px-3 text-center">
+                    <select
+                      value={newEventRecurrence}
+                      onChange={(e) => setNewEventRecurrence(e.target.value as 'once' | 'annual' | 'monthly')}
+                      className="h-8 text-xs rounded-md border border-input bg-background px-2"
+                    >
+                      <option value="once">Única</option>
+                      <option value="annual">Anual</option>
+                      <option value="monthly">Mensal</option>
+                    </select>
                   </td>
                   <td className="py-2 px-3 text-center">
                     <select
@@ -840,7 +1241,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       onClick={handleAddLiquidityEvent}
                       className="bg-primary text-white h-8 w-8 rounded-full flex items-center justify-center text-lg font-bold"
                       title="Adicionar evento"
-                      disabled={!newEventName || newEventAge < currentAge || newEventValue <= 0}
+                      disabled={!newEventName || newEventStartAge < currentAge || newEventValue <= 0 || (newEventRecurrence !== 'once' && newEventEndAge !== '' && Number(newEventEndAge) < newEventStartAge)}
                     >
                       +
                     </button>
@@ -886,11 +1287,13 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   }}
                 />
                 <Tooltip
-                  content={({ active, payload }) => {
+                  content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
+                      const age = payload[0]?.payload.age;
+                      const activeEvents = (liquidityEvents || []).filter((e) => e && e.enabled !== false && isEventActiveAtAge(e, age));
                       return (
                         <div className="bg-card/95 backdrop-blur-sm border border-border/80 px-3 py-2 rounded-md shadow-lg">
-                          <p className="font-medium text-xs mb-1">{`Idade: ${payload[0]?.payload.age} anos`}</p>
+                          <p className="font-medium text-xs mb-1">{`Idade: ${age} anos`}</p>
                           <div className="space-y-1">
                             {payload.map((entry) => (
                               <div key={entry.name} className="flex items-center justify-between gap-3 text-xs">
@@ -906,6 +1309,20 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                                 </span>
                               </div>
                             ))}
+                            {activeEvents.length > 0 && (
+                              <div className="pt-2 mt-1 border-t border-border/60">
+                                <div className="text-[10px] mb-1 text-muted-foreground">Eventos de liquidez</div>
+                                {activeEvents.map((e) => (
+                                  <div key={e.id} className="flex items-center justify-between gap-3 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className={`w-2 h-2 rounded-full ${e.isPositive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                      <span className="text-muted-foreground">{e.name}</span>
+                                    </div>
+                                    <span className="font-medium tabular-nums">{formatCurrency(e.value)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -920,11 +1337,14 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   x={idadeAposentadoria}
                   stroke="#7EC866"
                   strokeDasharray="3 3"
-                  label={{
-                    value: `Aposentadoria (${idadeAposentadoria} anos)`,
-                    position: 'insideTopRight',
-                    fill: '#7EC866',
-                    fontSize: 11
+                  label={({ viewBox }: any) => {
+                    const x = (viewBox?.x ?? 0) + (viewBox?.width ?? 0) - 6;
+                    const y = (viewBox?.y ?? 0) + 12;
+                    return (
+                      <text x={x} y={y} fill="#7EC866" fontSize={11} textAnchor="end">
+                        {`Aposentadoria (${idadeAposentadoria} anos)`}
+                      </text>
+                    );
                   }}
                 />
 
@@ -953,24 +1373,51 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   iconSize={10}
                 />
 
-                {liquidityEvents.map((event, index) => (
-                  <ReferenceLine
-                    key={event.id}
-                    x={event.age}
-                    stroke={event.isPositive ? "#22c55e" : "#ef4444"}
-                    strokeDasharray="3 3"
-                    label={{
-                      value: `${event.name} (${formatCurrency(event.value)})`,
-                      position: 'insideTopRight',
-                      fill: event.isPositive ? "#22c55e" : "#ef4444",
-                      fontSize: 11
-                    }}
-                  />
-                ))}
+                {liquidityEvents.map((event) => {
+                  if (event.enabled === false) return null;
+                  const age = event.startAge ?? event.age;
+                  const siblings = eventsByAge.get(age) || [];
+                  const localIndex = siblings.findIndex((e) => e.id === event.id);
+                  return (
+                    <ReferenceLine
+                      key={event.id}
+                      x={age}
+                      stroke={event.isPositive ? "#22c55e" : "#ef4444"}
+                      strokeDasharray="3 3"
+                      label={null}
+                    />
+                  );
+                })}
               </AreaChart>
             </ResponsiveContainer>
           </ChartContainer>
         </div>
+
+        {/* Lista compacta de eventos de liquidez */}
+        {liquidityEvents && liquidityEvents.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {liquidityEvents
+              .filter((e) => e && e.enabled !== false)
+              .sort((a, b) => (a.startAge ?? a.age) - (b.startAge ?? b.age))
+              .map((e) => (
+                <div
+                  key={e.id}
+                  className={`px-2 py-1 rounded-full border text-xs flex items-center gap-2 ${e.isPositive ? 'border-emerald-400 text-emerald-700 bg-emerald-50/60' : 'border-rose-400 text-rose-700 bg-rose-50/60'}`}
+                  title={`${e.name} • ${e.recurrence && e.recurrence !== 'once' ? 'Recorrente' : 'Único'}`}
+                >
+                  <span className={`inline-block w-2 h-2 rounded-full ${e.isPositive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  <span className="font-medium">{e.name}</span>
+                  <span className="mx-1">—</span>
+                  <span>{formatCurrency(e.value)}</span>
+                  <span className="mx-1">•</span>
+                  <span>{(e.startAge ?? e.age)} anos{e.endAge ? ` até ${e.endAge}` : ''}</span>
+                  {e.recurrence && e.recurrence !== 'once' && (
+                    <span className="ml-1 text-muted-foreground">(recorrente)</span>
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
 
         {/* Tabela de informações sobre o cenário */}
         <div className="mt-6 border border-border rounded-md overflow-hidden">
@@ -997,14 +1444,57 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
               <tr>
                 <td className="py-2 px-3">Duração do Patrimônio</td>
                 <td className="py-2 px-3 text-right">
-                  {projection.idadeEsgotamento ?
-                    `Até os ${projection.idadeEsgotamento} anos (${projection.idadeEsgotamento - idadeAposentadoria} anos)` :
-                    `Até os ${lifeExpectancy} anos`}
+                  {isPerpetuity ?
+                    "Perpétuo (nunca se esgota)" :
+                    projection.idadeEsgotamento ?
+                      `Até os ${projection.idadeEsgotamento} anos (${projection.idadeEsgotamento - idadeAposentadoria} anos)` :
+                      `Até os ${lifeExpectancy} anos`
+                  }
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        {/* Tabela de Fluxo de Caixa Anual com ocultar */}
+        <HideableCard
+          id="tabela-fluxo-caixa-aposentadoria"
+          isVisible={isCardVisible('tabela-fluxo-caixa-aposentadoria')}
+          onToggleVisibility={() => toggleCardVisibility('tabela-fluxo-caixa-aposentadoria')}
+          hideControls={Boolean(hideControls)}
+          className="mt-6"
+        >
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="py-2 px-3 text-left font-medium">Idade</th>
+                  <th className="py-2 px-3 text-left font-medium">Fase</th>
+                  <th className="py-2 px-3 text-right font-medium">Capital Inicial</th>
+                  <th className="py-2 px-3 text-right font-medium">Eventos</th>
+                  <th className="py-2 px-3 text-right font-medium">Aporte</th>
+                  <th className="py-2 px-3 text-right font-medium">Rendimento</th>
+                  <th className="py-2 px-3 text-right font-medium">Saque</th>
+                  <th className="py-2 px-3 text-right font-medium">Capital Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(projection.fluxoCaixaAnual || []).map((row: any, idx: number) => (
+                  <tr key={idx} className="border-b border-border last:border-0">
+                    <td className="py-2 px-3">{row.idade}</td>
+                    <td className="py-2 px-3">{row.fase}</td>
+                    <td className="py-2 px-3 text-right">{formatCurrency(Math.round(row.capitalInicial))}</td>
+                    <td className="py-2 px-3 text-right">{row.eventos === 0 ? '-' : formatCurrency(Math.round(row.eventos))}</td>
+                    <td className="py-2 px-3 text-right">{row.aporte === 0 ? '-' : formatCurrency(Math.round(row.aporte))}</td>
+                    <td className="py-2 px-3 text-right">{row.rendimento === 0 ? '-' : formatCurrency(Math.round(row.rendimento))}</td>
+                    <td className="py-2 px-3 text-right">{row.saque === 0 ? '-' : formatCurrency(Math.round(row.saque))}</td>
+                    <td className="py-2 px-3 text-right font-medium">{formatCurrency(Math.round(row.capitalFinal))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </HideableCard>
       </CardContent>
     </Card>
   );

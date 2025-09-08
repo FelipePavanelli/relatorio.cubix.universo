@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSectionVisibility } from '@/context/SectionVisibilityContext';
 import { cn } from '@/lib/utils';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface HideableSectionProps {
   sectionId: string;
@@ -15,7 +16,7 @@ const HideableSection: React.FC<HideableSectionProps> = ({
   className,
   hideControls = false,
 }) => {
-  const { isSectionVisible } = useSectionVisibility();
+  const { isSectionVisible, toggleSectionVisibility } = useSectionVisibility();
   const isVisible = isSectionVisible(sectionId);
 
   // Se os controles estão ocultos e a seção não está visível, não renderiza nada
@@ -23,31 +24,38 @@ const HideableSection: React.FC<HideableSectionProps> = ({
     return null;
   }
 
-  // Se a seção não está visível, renderiza uma versão oculta
+  // Se a seção não está visível, não renderiza nada (remodela o relatório como se a seção não existisse)
+  // Na impressão, sempre renderiza a seção visível ao consultor (mesmo sem controles),
+  // mas respeitando o estado de visibilidade salvo. Se estiver oculta, não renderiza.
   if (!isVisible) {
-    return (
-      <div id={sectionId} className={cn("min-h-screen relative", className)}>
-        <div className="absolute inset-0 bg-slate-100/30 flex items-center justify-center">
-          <div className="text-center p-8">
-            <div className="text-6xl mb-4">👁️</div>
-            <h3 className="text-xl font-medium text-slate-600 mb-2">
-              Seção Ocultada
-            </h3>
-            <p className="text-slate-500">
-              Esta seção foi ocultada do relatório do cliente
-            </p>
-            <div className="mt-4 text-xs text-slate-400">
-              ID: {sectionId}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
-  // Se a seção está visível, renderiza normalmente
+  // Se a seção está visível, renderiza normalmente com botão de alternância (quando permitido)
   return (
-    <div id={sectionId} className={cn("min-h-screen", className)}>
+    <div id={sectionId} className={cn("min-h-screen relative print-section", className)}>
+      {!hideControls && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSectionVisibility(sectionId); }}
+            className={cn(
+              "no-print inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
+              "bg-accent/10 border-accent/40 text-accent hover:bg-accent/20"
+            )}
+            aria-label={isVisible ? "Ocultar seção inteira" : "Mostrar seção"}
+            title={isVisible ? "Ocultar seção inteira" : "Mostrar seção"}
+          >
+            {isVisible ? (
+              <Eye size={16} className="" />
+            ) : (
+              <EyeOff size={16} className="" />
+            )}
+            <span>Seção</span>
+          </button>
+        </div>
+      )}
       {children}
     </div>
   );

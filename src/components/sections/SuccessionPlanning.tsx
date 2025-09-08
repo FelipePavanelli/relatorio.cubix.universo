@@ -72,19 +72,19 @@ const SuccessionPlanning: React.FC<SuccessionPlanningProps> = ({ data, hideContr
                 <Users size={28} className="text-accent" />
               </div>
             </div>
-            <h2 className="text-4xl font-bold mb-3">Planejamento Sucessório</h2>
+            <h2 className="text-4xl font-bold mb-3">7. Planejamento Sucessório</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Estratégias para garantir a transferência eficiente de patrimônio, preservar a harmonia familiar e minimizar custos tributários no processo sucessório.
             </p>
           </div>
         </div>
 
-        {/* Objectives and Financial Impact */}
+        {/* Objectives */}
         <div
           ref={cardRef1 as React.RefObject<HTMLDivElement>}
           className="mb-8 animate-on-scroll delay-1"
         >
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-1 gap-6">
             {/* Objectives */}
             <HideableCard
               id="objetivos-sucessao"
@@ -102,77 +102,15 @@ const SuccessionPlanning: React.FC<SuccessionPlanningProps> = ({ data, hideContr
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-3">
+                <div className="grid sm:grid-cols-2 gap-3">
                   {data?.sucessao?.situacaoAtual?.objetivosSucessorios?.map((objetivo, index) => (
-                    <li key={index} className="flex items-start gap-2">
+                    <div key={index} className="flex items-start gap-2 p-3 rounded-lg border">
                       <div className="h-6 w-6 rounded-full bg-accent/15 flex items-center justify-center text-accent shrink-0 mt-0.5">
                         {index + 1}
                       </div>
-                      <span>{objetivo}</span>
-                    </li>
+                      <span className="text-sm">{objetivo}</span>
+                    </div>
                   ))}
-                </ul>
-              </CardContent>
-            </HideableCard>
-
-            {/* Financial Impact */}
-            <HideableCard
-              id="impacto-financeiro-sucessao"
-              isVisible={isCardVisible("impacto-financeiro-sucessao")}
-              onToggleVisibility={() => toggleCardVisibility("impacto-financeiro-sucessao")}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield size={20} className="text-accent" />
-                  Impacto Financeiro
-                </CardTitle>
-                <CardDescription>
-                  Economia estimada com planejamento sucessório
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Patrimônio Transmissível</p>
-                      <p className="text-2xl font-medium">{formatCurrency(patrimonioTransmissivel)}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">Economia Estimada</p>
-                      <p className="text-2xl font-medium text-financial-success">
-                        {formatCurrency(economiaEstimada)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Custo sem planejamento</span>
-                        <span className="font-medium">{formatCurrency(impostoSemPlanejamento)}</span>
-                      </div>
-                      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="bg-financial-danger h-full" style={{ width: '100%' }}></div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Custo com planejamento</span>
-                        <span className="font-medium">{formatCurrency(impostoComPlanejamento)}</span>
-                      </div>
-                      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="bg-financial-success h-full" style={{ width: `${100 - percentualEconomia}%` }}></div>
-                      </div>
-                    </div>
-
-                    <div className="bg-accent/10 p-3 rounded-lg">
-                      <p className="text-sm">
-                        <span className="font-medium">Redução de {percentualEconomia}%</span> nos
-                        custos sucessórios com implementação do planejamento recomendado.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </HideableCard>

@@ -21,11 +21,18 @@ const ALL_CARD_IDS = [
     "projeto-vida-legado",
     "previdencia-privada-sucessao",
     "patrimonio-resumo",
+    "balanco-patrimonial-resumo",
     "composicao-patrimonial",
     "renda-despesas",
     "passivos",
     "ativos",
-    "financial-resumo"
+    "financial-resumo",
+    "objetivo-casa-praia",
+    "estrategias-casa-praia",
+    "simulador-financiamento",
+    "impacto-casa-praia",
+    "diagnostico-tributario",
+    "recomendacoes-estrategicas"
 ];
 
 // Função para criar um objeto com todos os cards visíveis
@@ -67,6 +74,7 @@ export const CardVisibilityProvider: React.FC<{ children: React.ReactNode }> = (
                     "renda-despesas": false,
                     "financial-resumo": false,
                     "patrimonio-resumo": false,
+                    "balanco-patrimonial-resumo": false,
                     "objetivos-sucessao": false,
                     "indicador-seguranca": false,
                     "projeto-vida-legado": false,
@@ -78,7 +86,13 @@ export const CardVisibilityProvider: React.FC<{ children: React.ReactNode }> = (
                     "instrumentos-sucessorios": false,
                     "recomendacoes-adicionais": false,
                     "impacto-financeiro-sucessao": false,
-                    "previdencia-privada-sucessao": false
+                    "previdencia-privada-sucessao": false,
+                    "objetivo-casa-praia": false,
+                    "estrategias-casa-praia": false,
+                    "simulador-financiamento": false,
+                    "impacto-casa-praia": false,
+                    "diagnostico-tributario": false,
+                    "recomendacoes-estrategicas": false
                 };
 
                 await axios.post(`${apiUrl}/clients/update-hidden-cards`, {

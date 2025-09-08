@@ -6,6 +6,7 @@ import Header from '@/components/layout/Header';
 import CoverPage from '@/components/sections/CoverPage';
 import FinancialSummary from '@/components/sections/FinancialSummary';
 import InvestmentManagement from '@/components/sections/InvestmentManagement';
+
 import RetirementPlanning from '@/components/sections/RetirementPlanning';
 import BeachHouse from '@/components/sections/BeachHouse';
 import TaxPlanning from '@/components/sections/TaxPlanning';
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils';
 import axios from 'axios';
 import SectionVisibilityControls from '@/components/layout/SectionVisibilityControls';
 import HideableSection from '@/components/ui/HideableSection';
+import { MODEL_CLASS_ALLOCATION, normalizePerfil, getRiskForClass, getLiquidityForClass, aggregateModelClasses, aggregateCurrentInvestments } from '@/data/modelPortfolios';
 
 interface IndexPageProps {
   accessor?: boolean;
@@ -131,21 +133,38 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
     imovelDesejado: userReports?.imovelDesejado || {},
     scoreFinanceiro: userReports?.scoreFinanceiro || {},
     investimentos: {
-      investimentosAtuais: userReports?.investimentos?.atuais || [
-        { tipo: 'Tesouro Direto', valor: 300000, percentual: 35, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.115 },
-        { tipo: 'CDB', valor: 200000, percentual: 23, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.125 },
-        { tipo: 'Ações', valor: 180000, percentual: 21, risco: 'Alto', liquidez: 'Média', rentabilidade: 0.18 },
-        { tipo: 'Fundos Imobiliários', valor: 120000, percentual: 14, risco: 'Médio', liquidez: 'Baixa', rentabilidade: 0.15 },
-        { tipo: 'Previdência', valor: 60000, percentual: 7, risco: 'Baixo', liquidez: 'Baixa', rentabilidade: 0.13 }
-      ],
-      sugestaoAltaVista: userReports?.investimentos?.sugestao || [
-        { tipo: 'Tesouro Direto', valor: 250000, percentual: 29, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.12 },
-        { tipo: 'CDB', valor: 150000, percentual: 17, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.13 },
-        { tipo: 'Ações', valor: 220000, percentual: 25, risco: 'Alto', liquidez: 'Média', rentabilidade: 0.20 },
-        { tipo: 'Fundos Imobiliários', valor: 100000, percentual: 12, risco: 'Médio', liquidez: 'Baixa', rentabilidade: 0.16 },
-        { tipo: 'Internacional', valor: 80000, percentual: 9, risco: 'Médio', liquidez: 'Média', rentabilidade: 0.17 },
-        { tipo: 'Fundos de Investimento', valor: 70000, percentual: 8, risco: 'Médio', liquidez: 'Média', rentabilidade: 0.16 }
-      ],
+      investimentosAtuais: (() => {
+        const atuais = userReports?.investimentos?.atuais || [
+          { tipo: 'Tesouro Direto', valor: 300000, percentual: 35, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.115 },
+          { tipo: 'CDB', valor: 200000, percentual: 23, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.125 },
+          { tipo: 'Ações', valor: 180000, percentual: 21, risco: 'Alto', liquidez: 'Média', rentabilidade: 0.18 },
+          { tipo: 'Fundos Imobiliários', valor: 120000, percentual: 14, risco: 'Médio', liquidez: 'Baixa', rentabilidade: 0.15 },
+          { tipo: 'Previdência', valor: 60000, percentual: 7, risco: 'Baixo', liquidez: 'Baixa', rentabilidade: 0.13 }
+        ];
+        return aggregateCurrentInvestments(atuais);
+      })(),
+      sugestaoAltaVista: (() => {
+        // Se vier da API, priorizar
+        if (userReports?.investimentos?.sugestao) return userReports.investimentos.sugestao;
+        // Caso contrário, montar a partir do perfil declarado e alocação por classe
+        const perfil = normalizePerfil(userReports?.perfil_investidor || 'Moderado');
+        const classes = MODEL_CLASS_ALLOCATION[perfil] || MODEL_CLASS_ALLOCATION['Moderado'];
+        // Agregar classes conforme regra: Pós/IPCA/Pré => Renda Fixa; RV Brasil/FII => Renda Variável; Multimercado permanece; demais => Outros
+        const aggregated = aggregateModelClasses(classes);
+        const totalAtual = (userReports?.investimentos?.atuais || []).reduce((sum: number, inv: any) => sum + (inv.valor || 0), 0) || 0;
+        const baseTotal = (userReports?.financas?.composicao_patrimonial?.Investimentos || 0) || totalAtual
+        const suggested = aggregated
+          .filter(c => c.percentual > 0)
+          .map(c => ({
+            tipo: c.tipo,
+            valor: Math.round((c.percentual / 100) * baseTotal),
+            percentual: c.percentual,
+            risco: getRiskForClass(c.tipo),
+            liquidez: getLiquidityForClass(c.tipo),
+            rentabilidade: 0
+          }));
+        return suggested;
+      })(),
       perfilInvestidor: userReports?.perfil_investidor || 'Moderado',
       scoreDiversificacao: userReports?.investimentos?.scoreDiversificacao || 65,
       scoreRisco: userReports?.investimentos?.scoreRisco || 70,
@@ -161,7 +180,25 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
         rentabilidadeEsperada: 2.8,
         reducaoRisco: 18,
         melhoriaLiquidez: 12
-      }
+      },
+      reservaEmergencia: (() => {
+        const despesasMensais = userReports?.financas?.resumo?.despesas_mensais || 0;
+        const sugerida = Math.max(0, Math.round(despesasMensais * 6));
+        const comp = userReports?.financas?.composicao_patrimonial || {};
+        const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        let atual = 0;
+        try {
+          const keys = Object.keys(comp || {});
+          for (const k of keys) {
+            const nk = normalize(k);
+            if (nk.includes('reserva') || nk.includes('emergencia')) {
+              const v = (comp as any)[k];
+              if (typeof v === 'number') atual += v;
+            }
+          }
+        } catch (_) { /* noop */ }
+        return { atual: Math.round(atual), sugerida };
+      })()
     },
     previdencia_privada: userReports?.previdencia_privada || {},
     
@@ -256,17 +293,33 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
             <Header />
             <main className="h-[calc(100vh-64px)] overflow-y-auto">
               <div className="min-h-screen">
-                <CoverPage clientData={getClientData().cliente} />
+                <CoverPage 
+                  clientData={getClientData().cliente} 
+                  priorities={[
+                    { item: "Proteção familiar e patrimonial no caso de morte", score: 10 },
+                    { item: "Reserva para educação dos filhos", score: 9 },
+                    { item: "Manutenção do padrão de vida: no caso de acidente, invalidez ou doença", score: 9 },
+                    { item: "Aposentadoria", score: 8 },
+                    { item: "Reserva de emergência", score: 7 },
+                    { item: "Projetos e sonhos financeiros", score: 6 }
+                  ]}
+                  retirementPlan={{
+                    idadePlanejada: getClientData().aposentadoria.idadeAposentadoria,
+                    rendaMensalDesejada: getClientData().aposentadoria.rendaMensalDesejada,
+                  }}
+                />
               </div>
               
               <HideableSection sectionId="summary" hideControls={clientPropect}>
                 <FinancialSummary data={getClientData().financas} hideControls={clientPropect} />
               </HideableSection>
               
+
+              
               <HideableSection sectionId="investment-management" hideControls={clientPropect}>
                 <InvestmentManagement data={getClientData().investimentos} hideControls={clientPropect} />
               </HideableSection>
-              
+
               <HideableSection sectionId="retirement" hideControls={clientPropect}>
                 <RetirementPlanning data={getClientData().aposentadoria} hideControls={clientPropect} />
               </HideableSection>

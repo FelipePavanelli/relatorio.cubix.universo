@@ -4,7 +4,7 @@ import HideableCard from '@/components/ui/HideableCard';
 import StatusChip from '@/components/ui/StatusChip';
 import DonutChart from '@/components/charts/DonutChart';
 import ProgressBar from '@/components/ui/ProgressBar';
-import { TrendingUp, TrendingDown, DollarSign, ArrowRight, Target, BarChart3, PieChart, AlertTriangle } from 'lucide-react';
+import { Target, BarChart3, PieChart } from 'lucide-react';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
@@ -31,6 +31,7 @@ interface InvestmentComparison {
     reducaoRisco: number;
     melhoriaLiquidez: number;
   };
+  reservaEmergencia?: { atual: number; sugerida: number };
 }
 
 interface InvestmentManagementProps {
@@ -42,6 +43,8 @@ interface InvestmentManagementProps {
 const investmentColors: Record<string, string> = {
   'Renda Fixa': '#60A5FA',           // Azul
   'Renda Variável': '#34D399',       // Verde
+  'Multimercado': '#22D3EE',         // Ciano
+  'Outros': '#C084FC',               // Roxo claro
   'Fundos Imobiliários': '#A78BFA',  // Roxo
   'Previdência': '#F59E0B',          // Amarelo
   'Tesouro Direto': '#EF4444',       // Vermelho
@@ -66,20 +69,13 @@ const getColorForInvestmentType = (investmentType: string): string => {
   return `hsl(${hue}, 70%, 60%)`;
 };
 
-// Função para obter status baseado no score
-const getScoreStatus = (score: number): 'success' | 'warning' | 'danger' => {
-  if (score >= 80) return 'success';
-  if (score >= 60) return 'warning';
-  return 'danger';
-};
+
 
 const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideControls }) => {
   const headerRef = useScrollAnimation();
   const overviewCardRef = useScrollAnimation();
   const currentInvestmentsCardRef = useScrollAnimation();
   const suggestedInvestmentsCardRef = useScrollAnimation();
-  const comparisonCardRef = useScrollAnimation();
-  const recommendationsCardRef = useScrollAnimation();
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
@@ -97,6 +93,33 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
     color: getColorForInvestmentType(inv.tipo),
     rawValue: formatCurrency(inv.valor)
   }));
+
+  // Comparativo sugerido vs. atual
+  const TOLERANCE = 5; // % de tolerância para considerar enquadrado
+  const categories = Array.from(
+    new Set([
+      ...data.investimentosAtuais.map(i => i.tipo),
+      ...data.sugestaoAltaVista.map(i => i.tipo),
+    ])
+  );
+
+  const mapPerc = (arr: typeof data.investimentosAtuais) =>
+    arr.reduce<Record<string, number>>((acc, i) => {
+      acc[i.tipo] = (acc[i.tipo] || 0) + i.percentual;
+      return acc;
+    }, {});
+
+  const currentPercMap = mapPerc(data.investimentosAtuais);
+  const suggestedPercMap = mapPerc(data.sugestaoAltaVista);
+
+  const comparativeRows = categories.map(cat => {
+    const atual = Math.round(currentPercMap[cat] || 0);
+    const sugerido = Math.round(suggestedPercMap[cat] || 0);
+    const diff = atual - sugerido; // positivo: acima do sugerido
+    return { categoria: cat, atual, sugerido, diff };
+  });
+
+  const isAligned = comparativeRows.every(r => Math.abs(r.diff) <= TOLERANCE);
 
   // Calcular totais
   const totalCurrent = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
@@ -116,7 +139,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                 <BarChart3 size={28} className="text-investment-primary" />
               </div>
             </div>
-            <h2 className="text-4xl font-bold mb-3">Gestão de Investimentos</h2>
+            <h2 className="text-4xl font-bold mb-3">2. Gestão de Investimentos</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Análise comparativa entre seus investimentos atuais e as recomendações 
               personalizadas da Alta Vista para otimizar seu portfólio.
@@ -135,7 +158,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
             onToggleVisibility={() => toggleCardVisibility("investment-overview")}
             hideControls={hideControls}
           >
-            <div className="grid md:grid-cols-4 gap-6 p-8">
+            <div className="grid md:grid-cols-2 gap-6 p-8">
               <div className="text-center">
                 <h3 className="text-muted-foreground text-sm mb-1">Perfil do Investidor</h3>
                 <div className="text-xl font-bold mb-1">{data.perfilInvestidor}</div>
@@ -145,35 +168,20 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   icon={<Target size={14} />}
                 />
               </div>
-
               <div className="text-center">
-                <h3 className="text-muted-foreground text-sm mb-1">Diversificação</h3>
-                <div className="text-3xl font-bold mb-1">{data.scoreDiversificacao}%</div>
-                <StatusChip
-                  status={getScoreStatus(data.scoreDiversificacao)}
-                  label={data.scoreDiversificacao >= 80 ? "Excelente" : data.scoreDiversificacao >= 60 ? "Boa" : "Melhorar"}
-                  icon={data.scoreDiversificacao >= 80 ? <TrendingUp size={14} /> : <AlertTriangle size={14} />}
-                />
-              </div>
-
-              <div className="text-center">
-                <h3 className="text-muted-foreground text-sm mb-1">Gestão de Risco</h3>
-                <div className="text-3xl font-bold mb-1">{data.scoreRisco}%</div>
-                <StatusChip
-                  status={getScoreStatus(data.scoreRisco)}
-                  label={data.scoreRisco >= 80 ? "Ótima" : data.scoreRisco >= 60 ? "Adequada" : "Atenção"}
-                  icon={data.scoreRisco >= 80 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                />
-              </div>
-
-              <div className="text-center">
-                <h3 className="text-muted-foreground text-sm mb-1">Liquidez</h3>
-                <div className="text-3xl font-bold mb-1">{data.scoreLiquidez}%</div>
-                <StatusChip
-                  status={getScoreStatus(data.scoreLiquidez)}
-                  label={data.scoreLiquidez >= 80 ? "Alta" : data.scoreLiquidez >= 60 ? "Média" : "Baixa"}
-                  icon={data.scoreLiquidez >= 80 ? <TrendingUp size={14} /> : <AlertTriangle size={14} />}
-                />
+                <h3 className="text-muted-foreground text-sm mb-1">Reserva de Emergência</h3>
+                <div className="text-lg font-semibold">Atual: {formatCurrency(data.reservaEmergencia?.atual || 0)}</div>
+                <div className="text-sm text-muted-foreground">Sugerida (6 meses): {formatCurrency(data.reservaEmergencia?.sugerida || 0)}</div>
+                {(() => {
+                  const atual = data.reservaEmergencia?.atual || 0;
+                  const sugerida = data.reservaEmergencia?.sugerida || 0;
+                  const ok = sugerida === 0 ? true : atual >= sugerida;
+                  return (
+                    <div className="mt-1 flex justify-center">
+                      <StatusChip status={ok ? 'success' : 'warning'} label={ok ? 'Adequada' : 'Insuficiente'} />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </HideableCard>
@@ -210,7 +218,8 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   {data.investimentosAtuais.map((inv, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-muted/30 rounded">
                       <span className="text-sm font-medium">{inv.tipo}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
                         <span className="text-sm">{inv.percentual}%</span>
                         <StatusChip
                           status={inv.risco === 'Baixo' ? 'success' : inv.risco === 'Médio' ? 'warning' : 'danger'}
@@ -254,7 +263,8 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   {data.sugestaoAltaVista.map((inv, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-primary/10 rounded">
                       <span className="text-sm font-medium">{inv.tipo}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
                         <span className="text-sm">{inv.percentual}%</span>
                         <StatusChip
                           status={inv.risco === 'Baixo' ? 'success' : inv.risco === 'Médio' ? 'warning' : 'danger'}
@@ -270,89 +280,41 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           </div>
         </div>
 
-        {/* Impact Analysis */}
-        <div
-          ref={comparisonCardRef as React.RefObject<HTMLDivElement>}
-          className="mb-10 animate-on-scroll delay-2"
-        >
+        {/* Comparative table and status */}
+        <div className="mb-10">
           <HideableCard
-            id="investment-impact"
-            isVisible={isCardVisible("investment-impact")}
-            onToggleVisibility={() => toggleCardVisibility("investment-impact")}
+            id="investment-comparative"
+            isVisible={isCardVisible("investment-comparative")}
+            onToggleVisibility={() => toggleCardVisibility("investment-comparative")}
             hideControls={hideControls}
           >
-            <div className="p-8">
-              <h3 className="text-xl font-semibold mb-6">Impacto Esperado da Reestruturação</h3>
-              <div className="grid md:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div className="bg-success/10 p-4 rounded-lg mb-3">
-                    <TrendingUp size={24} className="text-success mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-success">
-                      +{data.impactoEsperado.rentabilidadeEsperada}%
-                    </div>
-                  </div>
-                  <h4 className="font-medium mb-1">Rentabilidade Esperada</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Melhoria na rentabilidade anual do portfólio
-                  </p>
-                </div>
-
-                <div className="text-center">
-                  <div className="bg-warning/10 p-4 rounded-lg mb-3">
-                    <AlertTriangle size={24} className="text-warning mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-warning">
-                      -{data.impactoEsperado.reducaoRisco}%
-                    </div>
-                  </div>
-                  <h4 className="font-medium mb-1">Redução de Risco</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Diminuição da volatilidade do portfólio
-                  </p>
-                </div>
-
-                <div className="text-center">
-                  <div className="bg-info/10 p-4 rounded-lg mb-3">
-                    <DollarSign size={24} className="text-info mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-info">
-                      +{data.impactoEsperado.melhoriaLiquidez}%
-                    </div>
-                  </div>
-                  <h4 className="font-medium mb-1">Melhoria na Liquidez</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Aumento da facilidade de resgate
-                  </p>
-                </div>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Comparativo por Categoria</h3>
+                <StatusChip
+                  status={isAligned ? 'success' : 'warning'}
+                  label={isAligned ? 'Cliente enquadrado' : 'Fora do enquadramento'}
+                />
               </div>
-            </div>
-          </HideableCard>
-        </div>
-
-        {/* Recommendations */}
-        <div
-          ref={recommendationsCardRef as React.RefObject<HTMLDivElement>}
-          className="animate-on-scroll delay-3"
-        >
-          <HideableCard
-            id="investment-recommendations"
-            isVisible={isCardVisible("investment-recommendations")}
-            onToggleVisibility={() => toggleCardVisibility("investment-recommendations")}
-            hideControls={hideControls}
-          >
-            <div className="p-8">
-              <h3 className="text-xl font-semibold mb-6">Recomendações Específicas</h3>
-              <div className="space-y-4">
-                {data.recomendacoes.map((recomendacao, index) => (
-                  <div key={index} className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg">
-                    <div className="bg-primary/10 p-2 rounded-full mt-1">
-                      <ArrowRight size={16} className="text-primary" />
-                    </div>
-                    <p className="text-sm leading-relaxed">{recomendacao}</p>
+              <div className="space-y-2">
+                {comparativeRows.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-4 gap-2 items-center p-2 bg-muted/30 rounded">
+                    <span className="text-sm font-medium">{row.categoria}</span>
+                    <span className="text-sm text-right">{row.sugerido}%</span>
+                    <span className="text-sm text-right">{row.atual}%</span>
+                    <span className={`text-sm text-right ${Math.abs(row.diff) <= TOLERANCE ? 'text-muted-foreground' : row.diff > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {row.diff > 0 ? '+' : ''}{row.diff}%
+                    </span>
                   </div>
                 ))}
               </div>
+              <div className="mt-3 text-xs text-muted-foreground">
+                Diferença = Atual − Sugerido. Tolerância de {TOLERANCE}% por categoria.
+              </div>
             </div>
           </HideableCard>
         </div>
+
       </div>
     </section>
   );

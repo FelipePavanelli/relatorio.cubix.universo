@@ -133,6 +133,69 @@
     @apply text-xl font-medium mb-4 text-foreground/90;
   }
 
+  /* Financial Summary specific styles */
+  .section-container {
+    @apply max-w-6xl mx-auto;
+  }
+
+  .card-grid-3 {
+    @apply grid md:grid-cols-3 gap-6;
+  }
+
+  .card-grid-2 {
+    @apply grid md:grid-cols-2 gap-6;
+  }
+
+  .card-metric {
+    @apply text-center;
+  }
+
+  .card-metric-label {
+    @apply text-muted-foreground text-sm mb-1;
+  }
+
+  .card-metric-value {
+    @apply text-3xl font-bold mb-1;
+  }
+
+  .card-content {
+    @apply p-6;
+  }
+
+  .card-title {
+    @apply text-xl font-semibold mb-4;
+  }
+
+  /* Financial colors for better visual hierarchy */
+  .text-financial-success {
+    color: #7EC866;
+  }
+
+  .text-financial-danger {
+    color: #C8686D;
+  }
+
+  .text-financial-info {
+    color: #0353A4;
+  }
+
+  .text-financial-warning {
+    color: #FFC971;
+  }
+
+  .text-financial-highlight {
+    color: #FFC971;
+  }
+
+  /* Card layout utilities */
+  .card-flex-center {
+    @apply flex items-center justify-center;
+  }
+
+  .card-flex-between {
+    @apply flex justify-between items-center;
+  }
+
   .animate-on-scroll {
     opacity: 0;
     transform: translateY(20px);
@@ -174,19 +237,19 @@
   }
   
   .status-chip-success {
-    @apply bg-financial-success/20 text-financial-success;
+    @apply bg-[#7EC866]/20 text-[#7EC866];
   }
   
   .status-chip-warning {
-    @apply bg-financial-warning/20 text-financial-warning;
+    @apply bg-[#FFC971]/20 text-[#FFC971];
   }
   
   .status-chip-danger {
-    @apply bg-financial-danger/20 text-financial-danger;
+    @apply bg-[#C8686D]/20 text-[#C8686D];
   }
   
   .status-chip-info {
-    @apply bg-financial-info/20 text-financial-info;
+    @apply bg-[#0353A4]/20 text-[#0353A4];
   }
 
   .status-chip-default {
@@ -226,5 +289,16 @@
   .dot-nav-tooltip {
     will-change: transform, opacity;
     backface-visibility: hidden;
+  }
+
+  /* Print styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    .print-section {
+      page-break-inside: avoid;
+    }
   }
 }

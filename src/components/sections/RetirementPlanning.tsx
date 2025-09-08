@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Wallet, PiggyBank, LineChart, Calculator, Calendar, ArrowRight, AlertCircle } from 'lucide-react';
+import { BarChart, Wallet, PiggyBank, LineChart, Calculator, Calendar, ArrowRight, AlertCircle, TrendingUp, Shield, Globe, Target, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import HideableCard from '@/components/ui/HideableCard';
@@ -11,7 +11,7 @@ import { useCardVisibility } from '@/context/CardVisibilityContext';
 
 interface RetirementData {
   ativos: Array<{ tipo: string; valor: number }>;
-  passivos: Array<{ tipo: string; saldo_devedor: number }>;
+  passivos: Array<{ tipo: string; valor: number }>;
   patrimonioLiquido: number;
   excedenteMensal: number;
   totalInvestido: number;
@@ -42,7 +42,6 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
   const currentSituationRef = useScrollAnimation();
   const objetivoRef = useScrollAnimation();
   const projecaoRef = useScrollAnimation();
-  const estrategiaRef = useScrollAnimation();
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
   const [projectionData, setProjectionData] = React.useState<{
@@ -57,6 +56,12 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
     idadeEsgotamento: null,
     rendaMensal: data?.rendaMensalDesejada || 0,
     idadeAposentadoria: data?.idadeAposentadoria || 65
+  });
+
+  // Valores declarados pelo cliente (não mudam com a simulação)
+  const [declaredGoal, setDeclaredGoal] = React.useState<{ rendaMensalPretendida: number; idadeAposentadoriaPretendida: number }>({
+    rendaMensalPretendida: data?.rendaMensalDesejada || 0,
+    idadeAposentadoriaPretendida: data?.idadeAposentadoria || 65,
   });
 
   // Calculate percentage of income that should be invested (aligned with spreadsheet)
@@ -116,18 +121,18 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
 
   return (
     <section className="min-h-screen py-16 px-4" id="retirement">
-      <div className="max-w-4xl mx-auto">
+      <div className="section-container">
         <div
           ref={headerRef as React.RefObject<HTMLDivElement>}
           className="mb-12 text-center animate-on-scroll"
         >
           <div className="inline-block">
-            <div className="flex items-center justify-center mb-4">
-              <div className="bg-financial-success/30 p-3 rounded-full">
-                <PiggyBank size={28} className="text-financial-success" />
+            <div className="card-flex-center mb-4">
+              <div className="bg-accent/10 p-3 rounded-full">
+                <PiggyBank size={28} className="text-accent" />
               </div>
             </div>
-            <h2 className="text-4xl font-bold mb-3">Planejamento de Aposentadoria</h2>
+            <h2 className="text-4xl font-bold mb-3">3. Planejamento de Aposentadoria</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Estratégias e projeções para garantir sua independência financeira e
               qualidade de vida na aposentadoria.
@@ -155,12 +160,12 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
               <div className="flex flex-col items-center">
                 <div className="text-sm text-muted-foreground mb-1">Patrimônio Líquido</div>
                 <div className="text-2xl font-semibold">
-                  {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.saldo_devedor, 0))}
+                  {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0))}
                 </div>
                 <div className="mt-1">
                   <StatusChip
-                    status={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.saldo_devedor, 0)) >= 0 ? "success" : "danger"}
-                    label={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.saldo_devedor, 0)) >= 0 ? "Positivo" : "Negativo"}
+                    status={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0)) >= 0 ? "success" : "danger"}
+                    label={(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0)) >= 0 ? "Positivo" : "Negativo"}
                   />
                 </div>
               </div>
@@ -218,6 +223,13 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Registro fixo do objetivo informado (apresentação simplificada) */}
+              <div className="p-3 rounded-md border border-border/70 bg-muted/20 text-sm">
+                <div className="font-medium">Objetivo registrado</div>
+                <div className="text-muted-foreground mt-0.5">Renda passiva pretendida: <span className="font-semibold">{formatCurrency(declaredGoal.rendaMensalPretendida)}</span></div>
+                <div className="text-muted-foreground">Idade de aposentadoria: <span className="font-semibold">{declaredGoal.idadeAposentadoriaPretendida} anos</span></div>
+              </div>
+
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="flex flex-col items-center p-4 bg-muted/30 rounded-lg">
                   <Calendar size={28} className="text-financial-info mb-2" />
@@ -273,9 +285,9 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
           className="mb-8 animate-on-scroll delay-2"
         >
           <HideableCard
-            id="simulador-financiamento"
-            isVisible={isCardVisible("simulador-financiamento")}
-            onToggleVisibility={() => toggleCardVisibility("simulador-financiamento")}
+            id="projecao-patrimonial"
+            isVisible={isCardVisible("projecao-patrimonial")}
+            onToggleVisibility={() => toggleCardVisibility("projecao-patrimonial")}
             hideControls={hideControls}
           >
             <CardHeader>
@@ -296,12 +308,13 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                 inflationRate={data?.taxaInflacao || 0.0345}
                 scenarios={data?.cenarios || []}
                 onProjectionChange={setProjectionData}
+                hideControls={hideControls}
               />
             </CardContent>
           </HideableCard>
         </div>
       </div>
-    </section >
+    </section>
   );
 };
 

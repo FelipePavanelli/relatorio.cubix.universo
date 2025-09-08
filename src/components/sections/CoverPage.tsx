@@ -3,6 +3,7 @@ import { Card } from '../ui/card';
 import { Calendar, MapPin, User, Users } from 'lucide-react';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/formatCurrency';
 
 interface ClientData {
   nome: string;
@@ -12,9 +13,19 @@ interface ClientData {
   residencia: string;
 }
 
+interface Priority {
+  item: string;
+  score: number;
+}
+
 interface CoverPageProps {
   clientData: ClientData;
   date?: string;
+  priorities?: Priority[];
+  retirementPlan?: {
+    idadePlanejada?: number;
+    rendaMensalDesejada?: number;
+  };
 }
 
 // Componente customizado que estende o Card básico
@@ -40,11 +51,20 @@ const CoverPage: React.FC<CoverPageProps> = ({
     year: 'numeric', 
     month: 'long', 
     day: 'numeric' 
-  })
+  }),
+  priorities = [],
+  retirementPlan
 }) => {
   const headerRef = useScrollAnimation();
   const cardRef1 = useScrollAnimation();
   const cardRef2 = useScrollAnimation();
+  const idadePlanejada = Number(retirementPlan?.idadePlanejada) || 0;
+  const rendaMensalDesejada = Number(retirementPlan?.rendaMensalDesejada) || 0;
+  const prioridadesTop = priorities
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(p => p.item);
   
   return (
     <section id="cover" className="min-h-screen flex flex-col items-center justify-center py-8 px-4">
@@ -132,6 +152,33 @@ const CoverPage: React.FC<CoverPageProps> = ({
               especificamente para suas necessidades e objetivos. Ele contempla análises, 
               projeções e recomendações para otimizar sua jornada financeira.
             </p>
+            
+            {/* Prioridades do Cliente */}
+            {priorities.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold mb-3">Prioridades identificadas</h3>
+                <div className="space-y-2">
+                  {priorities
+                    .sort((a, b) => b.score - a.score) // Ordenar por prioridade (maior para menor)
+                    .map((priority, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <span className="font-medium">{priority.item}</span>
+                        <span className="text-accent font-bold text-lg">{priority.score}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Contexto do planejamento</h3>
+              <p className="text-sm text-muted-foreground">
+                Nosso plano considera como prioridades iniciais {prioridadesTop.join(', ')}.
+                Além disso, sua aposentadoria está planejada aos <span className="font-medium text-foreground">{idadePlanejada}</span> anos
+                com renda pretendida de <span className="font-medium text-foreground">{formatCurrency(rendaMensalDesejada)}</span> por mês.
+              </p>
+            </div>
+            
             <p>
               Navegue pelas seções usando a barra inferior ou os botões de navegação para 
               explorar cada aspecto do seu planejamento financeiro.

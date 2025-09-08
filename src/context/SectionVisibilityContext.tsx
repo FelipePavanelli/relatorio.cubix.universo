@@ -13,6 +13,7 @@ const SectionVisibilityContext = createContext<SectionVisibilityContextType | un
 // Lista de todas as seções possíveis
 const ALL_SECTION_IDS = [
     "summary",           // Resumo Financeiro
+    "investment-management", // Gestão de Investimentos
     "retirement",        // Aposentadoria
     "beach-house",       // Aquisição de Imóveis
     "tax",              // Planejamento Tributário

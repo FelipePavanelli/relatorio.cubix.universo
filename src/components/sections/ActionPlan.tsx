@@ -1,12 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowRight,
   Calendar,
-  CheckCircle,
   Clock,
   ListChecks,
-  ShieldCheck,
-  User
+  User,
+  Building2
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -19,11 +18,9 @@ import {
   CardHeader,
   CardTitle
 } from '../ui/card';
-import HideableCard from '@/components/ui/HideableCard';
-import { useCardVisibility } from '@/context/CardVisibilityContext';
 import StatusChip from '@/components/ui/StatusChip';
-import ProgressBar from '@/components/ui/ProgressBar';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface ActionPlanProps {
   data: any;
@@ -49,12 +46,9 @@ CardWithHighlight.displayName = "CardWithHighlight";
 
 const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
   const titleRef = useScrollAnimation<HTMLDivElement>();
-  const securityIndexRef = useScrollAnimation<HTMLDivElement>({ threshold: 0.2 });
   const timelineRef = useScrollAnimation<HTMLDivElement>({ threshold: 0.2 });
   const priorityRef = useScrollAnimation<HTMLDivElement>({ threshold: 0.2 });
   const nextStepsRef = useScrollAnimation<HTMLDivElement>({ threshold: 0.2 });
-
-  const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -74,48 +68,112 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
     return <div className="py-12 px-4 text-center">Dados do plano de ação não disponíveis</div>;
   }
 
-  // Indicador de segurança financeira dinâmico baseado em scoreFinanceiro
-  type ScoreFinanceiroItem = {
-    Nota: number | null;
-    Pilar: string;
-    'Peso (%)': number;
-    'Nota Ponderada': number;
-  };
-  const scoreFinanceiro: ScoreFinanceiroItem[] = Array.isArray(data.scoreFinanceiro) ? data.scoreFinanceiro : [];
-  const totalGeral = scoreFinanceiro.find((item) => item.Pilar === 'Total Geral');
-  const valorIndicador = totalGeral && typeof totalGeral['Nota Ponderada'] === 'number' ? Math.floor(totalGeral['Nota Ponderada']) : 0;
-  const elementosAvaliados = scoreFinanceiro.filter((item) => item.Pilar !== 'Total Geral').map((item) => item.Pilar);
-  const nivelIndicador = valorIndicador >= 70 ? 'Adequado' : valorIndicador >= 50 ? 'Em desenvolvimento' : 'Crítico';
-
-  // Períodos predefinidos para o cronograma
-  const periodos = [
+  // Mapear próximos passos usando os dados do JSON
+  const cronogramaInicial = [
     {
-      periodo: "Curto Prazo (1-3 meses)",
-      objetivoPrincipal: "Estruturação inicial"
+      titulo: "Sucessório e Tributário",
+      descricao: "Planejamento sucessório e otimização tributária",
+      icone: "⚖️",
+      cor: "bg-orange-500/10 text-orange-600 border-orange-200",
+      acoes: [
+        "Elaboração de testamento",
+        "Estruturação de doações em vida",
+        "Otimização tributária",
+        "Proteção sucessória"
+      ]
     },
     {
-      periodo: "Médio Prazo (4-12 meses)",
-      objetivoPrincipal: "Otimização fiscal e proteção"
+      titulo: "Diagnóstico de Alocação",
+      descricao: "Análise e reestruturação da alocação de investimentos",
+      icone: "📊",
+      cor: "bg-purple-500/10 text-purple-600 border-purple-200",
+      acoes: [
+        "Análise da carteira atual",
+        "Definição de nova alocação estratégica",
+        "Implementação das mudanças",
+        "Monitoramento contínuo"
+      ]
     },
     {
-      periodo: "Longo Prazo (1-3 anos)",
-      objetivoPrincipal: "Acumulação patrimonial"
+      titulo: "Projetos Imobilizados",
+      descricao: "Estruturação e otimização de investimentos em imóveis",
+      icone: "🏠",
+      cor: "bg-blue-500/10 text-blue-600 border-blue-200",
+      acoes: [
+        "Análise da carteira imobiliária atual",
+        "Identificação de oportunidades de otimização",
+        "Estruturação de novos investimentos",
+        "Monitoramento de performance"
+      ]
+    },
+    {
+      titulo: "Internacional",
+      descricao: "Planejamento e estruturação para atuação e proteção internacional",
+      icone: "🌍",
+      cor: "bg-cyan-500/10 text-cyan-600 border-cyan-200",
+      acoes: [
+        "Abertura de conta internacional",
+        "Planejamento cambial e remessas",
+        "Investimentos e estrutura patrimonial no exterior",
+        "Seguro viagem e cobertura de saúde internacional"
+      ]
+    },
+    {
+      titulo: "Proteção Patrimonial",
+      descricao: "Implementação de estratégias para proteção do patrimônio",
+      icone: "🛡️",
+      cor: "bg-green-500/10 text-green-600 border-green-200",
+      acoes: [
+        "Constituição de holding patrimonial",
+        "Estruturação de proteções jurídicas",
+        "Implementação de seguros adequados",
+        "Revisão de estruturas societárias"
+      ]
+    },
+    {
+      titulo: "Corporate (Soluções PJ)",
+      descricao: "Soluções para pessoa jurídica: estrutura, caixa, investimentos e proteção",
+      icone: "🏢",
+      cor: "bg-amber-500/10 text-amber-600 border-amber-200",
+      acoes: [
+        "Diagnóstico societário e fiscal",
+        "Gestão de caixa e aplicações da PJ",
+        "Benefícios, previdência e planos para colaboradores",
+        "Proteções corporativas (D&O, riscos e compliance)"
+      ]
     }
   ];
 
-  // Mapear cronograma usando os dados do JSON e os períodos predefinidos
-  const cronograma = data.planoAcao.cronograma.map((item: any, index: number) => {
-    // Usando os períodos predefinidos, mas limitando ao tamanho do array
-    const periodoIndex = index < periodos.length ? index : periodos.length - 1;
+  // Estado local para permitir reordenação de cards (não persistido)
+  const [cronograma, setCronograma] = useState(cronogramaInicial);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-    return {
-      periodo: periodos[periodoIndex].periodo,
-      objetivoPrincipal: periodos[periodoIndex].objetivoPrincipal,
-      descricao: item.etapa,
-      prazo: item.prazo,
-      acoes: [item.acao]
-    };
-  });
+  const handleDragStart = (index: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (toIndex: number) => (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+    if (isNaN(fromIndex) || fromIndex === toIndex) {
+      setDragIndex(null);
+      return;
+    }
+    setCronograma(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+    setDragIndex(null);
+  };
 
   // Verifica se o cliente precisa de uma holding familiar
   const precisaHolding = () => {
@@ -133,7 +191,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
         titulo: "Holding Familiar",
         descricao: "Constituição de holding patrimonial para proteção de bens e otimização fiscal",
         prioridade: "Alta",
-        prazo: data.planoAcao.cronograma[2]?.prazo || "90 dias",
+        prazo: data.planoAcao.cronograma?.[2]?.prazo || "90 dias",
         responsavel: "Advogado societário",
         passos: [
           "Análise da estrutura patrimonial atual",
@@ -151,7 +209,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
       titulo: "Planejamento Sucessório",
       descricao: "Estruturação de instrumentos jurídicos para proteção sucessória",
       prioridade: "Alta",
-      prazo: data.planoAcao.cronograma[2]?.prazo || "120 dias",
+      prazo: data.planoAcao.cronograma?.[2]?.prazo || "120 dias",
       responsavel: "Advogado especialista",
       passos: [
         "Elaboração de testamento",
@@ -170,7 +228,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
           'R$ ' + data.imovelDesejado.objetivo.valorImovel.toLocaleString('pt-BR') : 'R$ 1.000.000'}` :
         "Contratação de consórcio para aquisição da casa de praia",
       prioridade: "Média",
-      prazo: data.planoAcao.cronograma[3]?.prazo || "30 dias",
+      prazo: data.planoAcao.cronograma?.[3]?.prazo || "30 dias",
       responsavel: "Assessor de Investimentos",
       passos: [
         "Pesquisa das melhores administradoras",
@@ -186,7 +244,7 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
       titulo: "Diversificação de Investimentos",
       descricao: "Reestruturação da carteira para maior diversificação e proteção",
       prioridade: "Média",
-      prazo: data.planoAcao.cronograma[1]?.prazo || "60 dias",
+      prazo: data.planoAcao.cronograma?.[1]?.prazo || "60 dias",
       responsavel: "Assessor de Investimentos",
       passos: [
         "Análise da carteira atual",
@@ -204,208 +262,151 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
   // Obter as ações prioritárias dinâmicas
   const acoesPrioritarias = getAcoesPrioritarias();
 
-  // Dados para a conclusão
-  const conclusao = {
-    titulo: "Próximos Passos e Conclusão",
-    mensagemPrincipal: "Este plano de ação representa um roteiro personalizado para maximizar sua segurança financeira e alcançar seus objetivos patrimoniais.",
-    compromissoAssessoria: "Nossa equipe estará disponível para acompanhar cada etapa deste processo, oferecendo suporte contínuo e ajustes conforme necessário.",
-    recomendacaoFinal: precisaHolding()
-      ? "Recomendamos iniciar imediatamente pelas ações de alta prioridade, especialmente a constituição da holding familiar e a implementação das estratégias de proteção patrimonial."
-      : "Recomendamos iniciar imediatamente pelas ações de alta prioridade, focando na implementação das estratégias de proteção patrimonial e planejamento sucessório."
-  };
+  const specialistUrl = 'https://outlook.office.com/bookwithme/user/431917f0f5654e55bb2fa25f5b91cc7c@altavistainvest.com.br?anonymous&ismsaljsauthenabled&ep=pcard';
 
   return (
     <section className="py-16 px-4" id="action-plan">
-      <div className="max-w-5xl mx-auto">
+      <div className="section-container">
         <div
           ref={titleRef}
           className="mb-12 text-center animate-on-scroll"
         >
           <div className="inline-block">
-            <div className="flex items-center justify-center mb-4">
+            <div className="card-flex-center mb-4">
               <div className="bg-accent/10 p-3 rounded-full">
                 <ListChecks size={28} className="text-accent" />
               </div>
             </div>
-            <h2 className="text-4xl font-bold mb-3">Plano de Ação Financeira</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
+            <h2 className="text-4xl font-bold mb-3">8. Plano de Ação</h2>
+            <p className="card-description-standard max-w-2xl mx-auto">
               Conjunto de ações estratégicas para alcançar seus objetivos financeiros e patrimoniais
             </p>
           </div>
         </div>
 
         <div
-          ref={securityIndexRef}
-          className="max-w-5xl mx-auto mb-8 animate-on-scroll"
-        >
-          <HideableCard
-            id="indicador-seguranca"
-            isVisible={isCardVisible("indicador-seguranca")}
-            onToggleVisibility={() => toggleCardVisibility("indicador-seguranca")}
-            hideControls={hideControls}
-          >
-            <Card className="border border-muted-foreground/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <ShieldCheck className="text-accent h-5 w-5" />
-                  {data.planoAcao.indicadorSegurancaFinanceira.titulo}
-                </CardTitle>
-                <CardDescription>
-                  {data.planoAcao.indicadorSegurancaFinanceira.descricao}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col md:flex-row items-center gap-6 mb-4">
-                  <div className="relative w-40 h-40 flex items-center justify-center rounded-full border-8 border-accent/20">
-                    <div className="absolute inset-0 rounded-full border-8 border-accent"
-                      style={{
-                        clipPath: `inset(0 ${100 - valorIndicador}% 0 0)`
-                      }}
-                    />
-                    <div className="text-center">
-                      <div className="text-4xl font-bold">{valorIndicador}</div>
-                      <div className="text-sm text-muted-foreground">/ 100</div>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">Nível atual:</span>
-                        <StatusChip
-                          status={valorIndicador >= 70 ? 'success' : valorIndicador >= 50 ? 'info' : 'warning'}
-                          label={nivelIndicador}
-                        />
-                      </div>
-                    </div>
-                    <h4 className="text-lg font-medium mb-3">Elementos avaliados:</h4>
-                    <ul className="space-y-2">
-                      {elementosAvaliados.map((elemento, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <CheckCircle className="text-accent h-5 w-5 mt-0.5 flex-shrink-0" />
-                          <span>{elemento}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </HideableCard>
-        </div>
-
-        <div
           ref={timelineRef}
-          className="max-w-5xl mx-auto mb-8 animate-on-scroll"
+          className="section-container mb-8 animate-on-scroll"
         >
-          <h3 className="text-xl font-semibold mb-6">Cronograma de Implementação</h3>
-          <div className="relative">
+          <h3 className="text-xl font-semibold mb-6">Próximos Passos</h3>
+          {!hideControls && (
+            <div className="text-xs text-muted-foreground mb-2">Arraste os cards para reordenar conforme a prioridade do cliente</div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {cronograma.map((fase, index) => (
-              <div key={index} className="mb-8 md:mb-10">
-                <div className="flex flex-col md:flex-row gap-4 md:gap-8">
-                  <div className="md:w-1/4">
-                    <CardWithHighlight highlight={index === 0} className={index === 0 ? 'border-accent' : ''}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="h-5 w-5 text-accent" />
-                          <h4 className="font-semibold">{fase.periodo}</h4>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{fase.objetivoPrincipal}</p>
-                      </CardContent>
-                    </CardWithHighlight>
-                  </div>
-                  <div className="md:w-3/4">
-                    <Card>
-                      <CardContent className="p-4">
-                        <p className="mb-3 font-medium">{fase.descricao}</p>
-                        <ul className="space-y-2">
-                          {fase.acoes.map((acao, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <ArrowRight className="h-5 w-5 text-accent mt-0.5 flex-shrink-0" />
-                              <span>{acao}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-                {index < cronograma.length - 1 && (
-                  <div className="hidden md:block h-8 w-0.5 bg-border mx-auto my-0"></div>
+              <Card
+                key={index}
+                className={cn(
+                  "group hover:shadow-lg transition-all duration-300 border-2 hover:border-accent/50",
+                  dragIndex === index && "border-accent/70 bg-accent/5"
                 )}
-              </div>
+                draggable={!hideControls}
+                onDragStart={handleDragStart(index)}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop(index)}
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-full ${fase.cor} border-2`}>
+                      <span className="text-2xl">{fase.icone}</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium bg-accent/10 text-accent px-2 py-1 rounded-full">
+                          Passo {index + 1}
+                        </span>
+                        {!hideControls && (
+                          <span className="text-[10px] text-muted-foreground">(arraste para mover)</span>
+                        )}
+                      </div>
+                      <CardTitle className="text-lg font-bold">{fase.titulo}</CardTitle>
+                      <CardDescription className="mt-1">{fase.descricao}</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <ul className="space-y-2 mb-4">
+                    {fase.acoes.map((acao, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className="w-2 h-2 rounded-full bg-accent mt-2 flex-shrink-0"></div>
+                        <span className="text-sm text-muted-foreground">{acao}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="space-y-2">
+                    <Button asChild size="sm" className="w-full group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
+                      <a href={specialistUrl} target="_blank" rel="noopener noreferrer">
+                        Acionamento do Especialista
+                      </a>
+                    </Button>
+                    {(fase.titulo === "Projetos Imobilizados" || fase.titulo === "Proteção Patrimonial") && (
+                      <Button asChild size="sm" variant="outline" className="w-full">
+                        <a href="https://homolog.universo.univalores.com.br/modulo/univalores-credito" target="_blank" rel="noopener noreferrer">
+                          Tire suas dúvidas
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
 
         <div
           ref={priorityRef}
-          className="max-w-5xl mx-auto mb-6 animate-on-scroll"
+          className="section-container mb-6 animate-on-scroll"
         >
-          <h3 className="text-xl font-semibold mb-6">Ações Prioritárias</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {acoesPrioritarias.map((acao, index) => (
-              <Card key={index} className={acao.prioridade === 'Alta' ? 'border-financial-danger/50' : ''}>
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-xl">{acao.titulo}</CardTitle>
-                    <Badge className={getPriorityColor(acao.prioridade)}>
-                      {acao.prioridade}
-                    </Badge>
-                  </div>
-                  <CardDescription className="mt-1">{acao.descricao}</CardDescription>
-                </CardHeader>
-                <CardContent className="py-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Prazo: <span className="font-medium">{acao.prazo}</span></span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Responsável: <span className="font-medium">{acao.responsavel}</span></span>
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <h5 className="text-sm font-medium mb-2">Passos principais:</h5>
-                    <ol className="text-sm space-y-1">
-                      {acao.passos.map((passo, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className="text-xs inline-flex items-center justify-center size-5 rounded-full bg-accent/10 text-accent font-medium">{i + 1}</span>
-                          {passo}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between border-t pt-4">
-                  <span className="text-sm text-muted-foreground">Impacto: {acao.impacto}</span>
-                  <StatusChip
-                    status={acao.status === 'Concluído' ? 'success' : acao.status === 'Em progresso' ? 'info' : 'warning'}
-                    label={acao.status}
-                  />
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        <div ref={nextStepsRef} className="max-w-5xl mx-auto mb-6 animate-on-scroll delay-1">
-          <Card className="bg-gradient-to-br from-accent/10 to-background border-accent/30">
-            <CardHeader className="pb-3">
-              <CardTitle>{conclusao.titulo}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 pb-6">
-              <p className="text-lg mb-4">{conclusao.mensagemPrincipal}</p>
-              <p className="mb-4">{conclusao.compromissoAssessoria}</p>
-              <div className="bg-accent/10 border border-accent/20 p-4 rounded-lg">
-                <h4 className="flex items-center gap-2 font-medium mb-2">
-                  <ArrowRight className="text-accent" />
-                  Recomendação Final
-                </h4>
-                <p>{conclusao.recomendacaoFinal}</p>
+          {false && (
+            <>
+              <h3 className="text-xl font-semibold mb-6">Ações Prioritárias</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {acoesPrioritarias.map((acao, index) => (
+                  <Card key={index} className={acao.prioridade === 'Alta' ? 'border-financial-danger/50' : ''}>
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-xl">{acao.titulo}</CardTitle>
+                        <Badge className={getPriorityColor(acao.prioridade)}>
+                          {acao.prioridade}
+                        </Badge>
+                      </div>
+                      <CardDescription className="mt-1">{acao.descricao}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="py-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">Prazo: <span className="font-medium">{acao.prazo}</span></span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">Responsável: <span className="font-medium">{acao.responsavel}</span></span>
+                        </div>
+                      </div>
+                      <div className="mb-3">
+                        <h5 className="text-sm font-medium mb-2">Passos principais:</h5>
+                        <ol className="text-sm space-y-1">
+                          {acao.passos.map((passo, i) => (
+                            <li key={i} className="flex items-center gap-2">
+                              <span className="text-xs inline-flex items-center justify-center size-5 rounded-full bg-accent/10 text-accent font-medium">{i + 1}</span>
+                              {passo}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t pt-4">
+                      <span className="text-sm text-muted-foreground">Impacto: {acao.impacto}</span>
+                      <StatusChip
+                        status={acao.status === 'Concluído' ? 'success' : acao.status === 'Em progresso' ? 'info' : 'warning'}
+                        label={acao.status}
+                      />
+                    </CardFooter>
+                  </Card>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            </>
+          )}
         </div>
       </div>
     </section>
