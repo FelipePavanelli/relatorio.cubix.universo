@@ -15,8 +15,6 @@ interface FinanceSummary {
   excedenteMensal: number;
   rendas: Array<{ fonte?: string; descricao?: string; valor: number; tributacao?: string }>;
   despesasMensais: number;
-  // Lista detalhada de despesas (quando disponível)
-  despesas?: Array<{ descricao?: string; categoria?: string; tipo?: string; item?: string; valor: number }>;
   composicaoPatrimonial: Record<string, number>;
   ativos: Array<{ tipo: string; valor: number; classe?: string }>;
   passivos: Array<{ tipo: string; valor: number }>;
@@ -48,7 +46,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
   // Totais de ativos e passivos para o balanço
   const totalAtivosLista = (data?.ativos || []).reduce((s, a) => s + (Number(a?.valor) || 0), 0);
   const totalPassivosLista = (data?.passivos || []).reduce((s, p) => s + (Number(p?.valor) || 0), 0);
-  const patrimonioLiquidoResumo = (data?.patrimonioLiquido || (totalAtivosLista - totalPassivosLista));
+  const patrimonioLiquidoResumo = totalAtivosLista - totalPassivosLista;
 
   const barData = [
     { nome: 'Renda', valor: totalIncome, color: '#16a34a' },
@@ -88,7 +86,9 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
             <Card className="p-6 text-center relative h-full col-span-12 md:col-span-4">
               <h3 className="text-muted-foreground text-sm mb-1">Investimentos Financeiros</h3>
               <div className="text-3xl font-bold mb-1">
-                {data.ativos.length > 0 ? formatCurrency(data.ativos[0].valor) : formatCurrency(0)}
+                {formatCurrency(
+                  data.ativos.find(ativo => ativo.tipo === "Investimentos")?.valor || 0
+                )}
               </div>
               {/* <StatusChip
                 status="success"
@@ -197,23 +197,17 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                   </div>
                   <div>
                     <h4 className="font-medium mb-2">Despesas</h4>
-                    {data.despesas && data.despesas.length > 0 ? (
-                      <div className="space-y-2">
-                        {data.despesas.map((despesa, index) => (
-                          <div key={index} className="flex justify-between items-start">
-                            <div className="text-sm">
-                              <div className="font-medium">{despesa.descricao || despesa.categoria || despesa.tipo || despesa.item || 'Despesa'}</div>
-                            </div>
-                            <div className="flex items-center gap-6">
-                              <div className="text-sm font-medium">{formatCurrency(despesa.valor)} / mês</div>
-                              <div className="text-sm font-medium text-muted-foreground">{formatCurrency((despesa as any)?.valorAnual ?? (despesa.valor * 12))} / ano</div>
-                            </div>
-                          </div>
-                        ))}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div className="text-sm">
+                          <div className="font-medium">Despesas Mensais</div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className="text-sm font-medium">{formatCurrency(data.despesasMensais)} / mês</div>
+                          <div className="text-sm font-medium text-muted-foreground">{formatCurrency(data.despesasMensais * 12)} / ano</div>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Sem detalhes cadastrados</p>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>

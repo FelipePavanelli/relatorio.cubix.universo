@@ -956,9 +956,20 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
               <CurrencyInput
                 id="aporteMensal"
                 value={aporteMensal}
-                onChange={() => { /* bloqueado */ }}
+                onChange={(newValue) => {
+                  setAporteMensal(newValue);
+                  // Recalcular projeções quando o aporte mensal for alterado
+                  const newProjectionData = {
+                    capitalNecessario: projectionData.capitalNecessario,
+                    aporteMensal: newValue,
+                    idadeEsgotamento: projectionData.idadeEsgotamento,
+                    rendaMensal: projectionData.rendaMensal,
+                    idadeAposentadoria: projectionData.idadeAposentadoria
+                  };
+                  onProjectionChange?.(newProjectionData);
+                }}
                 className="h-9"
-                disabled
+                disabled={false}
               />
             </div>
 

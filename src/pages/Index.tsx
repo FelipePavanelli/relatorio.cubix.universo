@@ -60,7 +60,7 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
     aposentadoria: {
       patrimonioLiquido: userReports?.financas?.resumo?.patrimonio_liquido || 0,
       excedenteMensal: userReports?.financas?.resumo?.excedente_mensal || 0,
-      totalInvestido: userReports?.financas?.composicao_patrimonial?.Investimentos || 0,
+      totalInvestido: userReports?.financas?.investimentos_detalhados?.total_investimentos || 0,
       ativos: userReports?.financas?.ativos?.map(a => ({
         tipo: a.tipo,
         valor: a.valor,
@@ -133,6 +133,8 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
     imovelDesejado: userReports?.imovelDesejado || {},
     scoreFinanceiro: userReports?.scoreFinanceiro || {},
     investimentos: {
+      totalInvestimentos: userReports?.financas?.investimentos_detalhados?.total_investimentos || 0,
+      investimentosDetalhados: userReports?.financas?.investimentos_detalhados,
       investimentosAtuais: (() => {
         const atuais = userReports?.investimentos?.atuais || [
           { tipo: 'Tesouro Direto', valor: 300000, percentual: 35, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.115 },

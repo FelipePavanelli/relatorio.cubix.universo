@@ -18,6 +18,28 @@ interface Investment {
   rentabilidade: number;
 }
 
+interface InvestimentosDetalhados {
+  total_investimentos: number;
+  por_classe: {
+    renda_fixa: number | null;
+    renda_variavel: number | null;
+    multimercado: number | null;
+    outras: number | null;
+  };
+  por_classe_percentual: {
+    renda_fixa_pct: number | null;
+    renda_variavel_pct: number | null;
+    multimercado_pct: number | null;
+    outras_pct: number | null;
+  };
+  alocacao_por_produto: any[];
+  liquidez: {
+    imediata_estimado: number | null;
+    fonte: string | null;
+  };
+  observacoes: string | null;
+}
+
 interface InvestmentComparison {
   investimentosAtuais: Investment[];
   sugestaoAltaVista: Investment[];
@@ -32,6 +54,8 @@ interface InvestmentComparison {
     melhoriaLiquidez: number;
   };
   reservaEmergencia?: { atual: number; sugerida: number };
+  totalInvestimentos?: number;
+  investimentosDetalhados?: InvestimentosDetalhados;
 }
 
 interface InvestmentManagementProps {
@@ -79,15 +103,107 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
+  // Verificar se temos dados detalhados preenchidos
+  const hasDetailedData = data.investimentosDetalhados && 
+    (data.investimentosDetalhados.por_classe.renda_fixa !== null ||
+     data.investimentosDetalhados.por_classe.renda_variavel !== null ||
+     data.investimentosDetalhados.por_classe.multimercado !== null ||
+     data.investimentosDetalhados.por_classe.outras !== null);
+
+  // Calcular totais
+  const totalCurrent = data.totalInvestimentos || data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
+  
+  // Se temos dados detalhados, usar eles; senão, usar os dados atuais
+  const currentInvestmentsData = hasDetailedData ? 
+    (() => {
+      const detailed = data.investimentosDetalhados!;
+      const investments: Investment[] = [];
+      
+      // Mapear dados detalhados para o formato Investment
+      if (detailed.por_classe.renda_fixa !== null) {
+        investments.push({
+          tipo: 'Renda Fixa',
+          valor: detailed.por_classe.renda_fixa,
+          percentual: detailed.por_classe_percentual.renda_fixa_pct || 0,
+          risco: 'Baixo',
+          liquidez: 'Alta',
+          rentabilidade: 0
+        });
+      }
+      if (detailed.por_classe.renda_variavel !== null) {
+        investments.push({
+          tipo: 'Renda Variável',
+          valor: detailed.por_classe.renda_variavel,
+          percentual: detailed.por_classe_percentual.renda_variavel_pct || 0,
+          risco: 'Alto',
+          liquidez: 'Média',
+          rentabilidade: 0
+        });
+      }
+      if (detailed.por_classe.multimercado !== null) {
+        investments.push({
+          tipo: 'Multimercado',
+          valor: detailed.por_classe.multimercado,
+          percentual: detailed.por_classe_percentual.multimercado_pct || 0,
+          risco: 'Médio',
+          liquidez: 'Média',
+          rentabilidade: 0
+        });
+      }
+      if (detailed.por_classe.outras !== null) {
+        investments.push({
+          tipo: 'Outros',
+          valor: detailed.por_classe.outras,
+          percentual: detailed.por_classe_percentual.outras_pct || 0,
+          risco: 'Médio',
+          liquidez: 'Baixa',
+          rentabilidade: 0
+        });
+      }
+      
+      // Se não temos nenhum dado detalhado preenchido, usar dados de fallback
+      if (investments.length === 0) {
+        // Recalcular os dados de fallback para somar o total_investimentos
+        const fallbackTotal = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
+        const scaleFactor = totalCurrent / fallbackTotal;
+        
+        return data.investimentosAtuais.map(inv => ({
+          ...inv,
+          valor: Math.round(inv.valor * scaleFactor)
+        }));
+      }
+      
+      return investments;
+    })() : 
+    (() => {
+      // Quando não temos dados detalhados, recalcular os dados de fallback
+      const fallbackTotal = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
+      const scaleFactor = totalCurrent / fallbackTotal;
+      
+      return data.investimentosAtuais.map(inv => ({
+        ...inv,
+        valor: Math.round(inv.valor * scaleFactor)
+      }));
+    })();
+  
+  // Recalcular sugestões baseadas no total_investimentos
+  const recalculatedSuggestions = data.sugestaoAltaVista.map(inv => ({
+    ...inv,
+    valor: Math.round((inv.percentual / 100) * totalCurrent)
+  }));
+  
+  const totalSuggested = totalCurrent; // O total sugerido deve ser igual ao total atual
+
   // Preparar dados para os gráficos
-  const currentChartData = data.investimentosAtuais.map(inv => ({
+  const currentChartData = currentInvestmentsData.map(inv => ({
     name: inv.tipo,
     value: inv.percentual,
     color: getColorForInvestmentType(inv.tipo),
     rawValue: formatCurrency(inv.valor)
   }));
 
-  const suggestedChartData = data.sugestaoAltaVista.map(inv => ({
+  // Preparar dados para os gráficos com valores recalculados
+  const suggestedChartData = recalculatedSuggestions.map(inv => ({
     name: inv.tipo,
     value: inv.percentual,
     color: getColorForInvestmentType(inv.tipo),
@@ -98,19 +214,19 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
   const TOLERANCE = 5; // % de tolerância para considerar enquadrado
   const categories = Array.from(
     new Set([
-      ...data.investimentosAtuais.map(i => i.tipo),
-      ...data.sugestaoAltaVista.map(i => i.tipo),
+      ...currentInvestmentsData.map(i => i.tipo),
+      ...recalculatedSuggestions.map(i => i.tipo),
     ])
   );
 
-  const mapPerc = (arr: typeof data.investimentosAtuais) =>
+  const mapPerc = (arr: typeof currentInvestmentsData) =>
     arr.reduce<Record<string, number>>((acc, i) => {
       acc[i.tipo] = (acc[i.tipo] || 0) + i.percentual;
       return acc;
     }, {});
 
-  const currentPercMap = mapPerc(data.investimentosAtuais);
-  const suggestedPercMap = mapPerc(data.sugestaoAltaVista);
+  const currentPercMap = mapPerc(currentInvestmentsData);
+  const suggestedPercMap = mapPerc(recalculatedSuggestions);
 
   const comparativeRows = categories.map(cat => {
     const atual = Math.round(currentPercMap[cat] || 0);
@@ -120,10 +236,6 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
   });
 
   const isAligned = comparativeRows.every(r => Math.abs(r.diff) <= TOLERANCE);
-
-  // Calcular totais
-  const totalCurrent = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
-  const totalSuggested = data.sugestaoAltaVista.reduce((sum, inv) => sum + inv.valor, 0);
 
   return (
     <section className="py-16 px-4" id="investment-management">
@@ -216,7 +328,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   legendPosition="bottom"
                 />
                 <div className="mt-4 space-y-2">
-                  {data.investimentosAtuais.map((inv, index) => (
+                  {currentInvestmentsData.map((inv, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-muted/30 rounded">
                       <span className="text-sm font-medium">{inv.tipo}</span>
                       <div className="flex items-center gap-3">
@@ -262,7 +374,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   legendPosition="bottom"
                 />
                 <div className="mt-4 space-y-2">
-                  {data.sugestaoAltaVista.map((inv, index) => (
+                  {recalculatedSuggestions.map((inv, index) => (
                     <div key={index} className="flex justify-between items-center p-2 bg-primary/10 rounded">
                       <span className="text-sm font-medium">{inv.tipo}</span>
                       <div className="flex items-center gap-3">
@@ -298,18 +410,27 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   label={isAligned ? 'Cliente enquadrado' : 'Fora do enquadramento'}
                 />
               </div>
-              <div className="space-y-2">
-                {comparativeRows.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-4 gap-2 items-center p-2 bg-muted/30 rounded">
-                    <span className="text-sm font-medium">{row.categoria}</span>
-                    <span className="text-sm text-right">{row.sugerido}%</span>
-                    <span className="text-sm text-right">{row.atual}%</span>
-                    <span className={`text-sm text-right ${Math.abs(row.diff) <= TOLERANCE ? 'text-muted-foreground' : row.diff > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {row.diff > 0 ? '+' : ''}{row.diff}%
-                    </span>
-                  </div>
-                ))}
-              </div>
+               <div className="space-y-2">
+                 {/* Header das colunas */}
+                 <div className="grid grid-cols-4 gap-2 items-center p-2 bg-muted/50 rounded font-medium text-sm">
+                   <span>Categoria</span>
+                   <span className="text-right">Atual</span>
+                   <span className="text-right">Sugerido</span>
+                   <span className="text-right">Diferença</span>
+                 </div>
+                 
+                 {/* Dados das linhas */}
+                 {comparativeRows.map((row, idx) => (
+                   <div key={idx} className="grid grid-cols-4 gap-2 items-center p-2 bg-muted/30 rounded">
+                     <span className="text-sm font-medium">{row.categoria}</span>
+                     <span className="text-sm text-right">{row.atual}%</span>
+                     <span className="text-sm text-right">{row.sugerido}%</span>
+                     <span className={`text-sm text-right ${Math.abs(row.diff) <= TOLERANCE ? 'text-muted-foreground' : row.diff > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                       {row.diff > 0 ? '+' : ''}{row.diff}%
+                     </span>
+                   </div>
+                 ))}
+               </div>
               <div className="mt-3 text-xs text-muted-foreground">
                 Diferença = Atual − Sugerido. Tolerância de {TOLERANCE}% por categoria.
               </div>

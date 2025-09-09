@@ -159,14 +159,9 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
             <CardContent>
               <div className="card-grid-3">
                 <div className="card-metric">
-                  <h3 className="card-metric-label">Investimentos Financeiros Atuais</h3>
+                  <h3 className="card-metric-label">Patrimônio Líquido</h3>
                   <div className="card-metric-value">
-                    {formatCurrency(
-                      (data?.totalInvestido ??
-                        (data?.ativos
-                          ?.filter(asset => asset.tipo === 'Investimentos')
-                          .reduce((sum, asset) => sum + asset.valor, 0))) || 0
-                    )}
+                    {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0))}
                   </div>
                 </div>
                 <div className="card-metric">
@@ -176,9 +171,9 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                   </div>
                 </div>
                 <div className="card-metric">
-                  <h3 className="card-metric-label">Patrimônio Líquido</h3>
+                  <h3 className="card-metric-label">Investimentos Financeiros Atuais</h3>
                   <div className="card-metric-value">
-                    {formatCurrency(data.ativos.reduce((sum, asset) => sum + asset.valor, 0) - data.passivos.reduce((sum, liability) => sum + liability.valor, 0))}
+                    {formatCurrency(data?.totalInvestido || 0)}
                   </div>
                 </div>
               </div>
