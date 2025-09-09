@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Card } from '../ui/card';
-import { Calendar, MapPin, User, Users } from 'lucide-react';
+import { Calendar, MapPin, User, Users, Briefcase } from 'lucide-react';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatCurrency';
@@ -11,6 +11,10 @@ interface ClientData {
   estadoCivil: string;
   regimeCasamento: string;
   residencia: string;
+  profissao?: string;
+  tempoProfissao?: string;
+  dependentes?: Array<{ tipo?: string; idade?: number }>;
+  cep?: string;
 }
 
 interface Priority {
@@ -26,6 +30,7 @@ interface CoverPageProps {
     idadePlanejada?: number;
     rendaMensalDesejada?: number;
   };
+  objetivos?: Array<{ prazo?: string; descricao?: string; valor_necessario?: number }>;
 }
 
 // Componente customizado que estende o Card básico
@@ -53,7 +58,8 @@ const CoverPage: React.FC<CoverPageProps> = ({
     day: 'numeric' 
   }),
   priorities = [],
-  retirementPlan
+  retirementPlan,
+  objetivos = []
 }) => {
   const headerRef = useScrollAnimation();
   const cardRef1 = useScrollAnimation();
@@ -116,16 +122,38 @@ const CoverPage: React.FC<CoverPageProps> = ({
                   </p>
                 </div>
               </div>
-              
-              <div className="flex items-start gap-3">
-                <div className="mt-1 bg-accent/10 p-2 rounded-full">
-                  <MapPin size={18} className="text-accent" />
+
+              {clientData.profissao && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-accent/10 p-2 rounded-full">
+                    <Briefcase size={18} className="text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Profissão</h3>
+                    <p className="text-lg">{clientData.profissao}</p>
+                    {clientData.tempoProfissao && (
+                      <p className="text-sm text-muted-foreground">Tempo na profissão: {clientData.tempoProfissao}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-medium">Residência</h3>
-                  <p className="text-lg">{clientData.residencia}</p>
+              )}
+
+              {(clientData.residencia || clientData.cep) && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-accent/10 p-2 rounded-full">
+                    <MapPin size={18} className="text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Residência</h3>
+                    {clientData.residencia && (
+                      <p className="text-lg">{clientData.residencia}</p>
+                    )}
+                    {clientData.cep && (
+                      <p className="text-sm text-muted-foreground">CEP: {clientData.cep}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
               
               <div className="flex items-start gap-3">
                 <div className="mt-1 bg-accent/10 p-2 rounded-full">
@@ -136,6 +164,23 @@ const CoverPage: React.FC<CoverPageProps> = ({
                   <p className="text-lg">{date}</p>
                 </div>
               </div>
+
+              {Array.isArray(clientData.dependentes) && clientData.dependentes.length > 0 && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-1 bg-accent/10 p-2 rounded-full">
+                    <Users size={18} className="text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Dependentes</h3>
+                    <p className="text-lg">{clientData.dependentes.length} dependente(s)</p>
+                    <p className="text-sm text-muted-foreground">
+                      {clientData.dependentes
+                        .map((d) => `${d?.tipo || 'Dependente'}${typeof d?.idade === 'number' ? ` (${d.idade} anos)` : ''}`)
+                        .join(', ')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -178,6 +223,27 @@ const CoverPage: React.FC<CoverPageProps> = ({
                 com renda pretendida de <span className="font-medium text-foreground">{formatCurrency(rendaMensalDesejada)}</span> por mês.
               </p>
             </div>
+
+            {objetivos && objetivos.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold mb-3">Objetivos declarados</h3>
+                <div className="space-y-2">
+                  {objetivos.slice(0, 3).map((obj, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                      <div>
+                        <div className="font-medium">{obj.descricao || 'Objetivo'}</div>
+                        {obj.prazo && (
+                          <div className="text-xs text-muted-foreground">Prazo: {obj.prazo}</div>
+                        )}
+                      </div>
+                      {typeof obj.valor_necessario === 'number' && (
+                        <div className="text-accent font-bold text-lg">{formatCurrency(obj.valor_necessario)}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
             <p>
               Navegue pelas seções usando a barra inferior ou os botões de navegação para 

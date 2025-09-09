@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Card,
   CardHeader,
@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
+import { calculateIrpfComparison } from '@/utils/irpf';
+import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { Card as UiCard } from '@/components/ui/card';
 
 interface TaxPlanningProps {
   data: any;
@@ -29,37 +33,85 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
   const { tributario } = data;
   const headerRef = useScrollAnimation();
   const diagnosticoRef = useScrollAnimation();
+  const comparativoRef = useScrollAnimation();
   const recomendacoesRef = useScrollAnimation();
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
   // Diagnóstico Tributário - cálculos dinâmicos a partir das rendas
   const rendas = Array.isArray(data?.financas?.rendas) ? data.financas.rendas : [];
+  const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isSpouseIncome = (r: any) => normalize(r?.descricao || r?.fonte || '').includes('conjuge');
+  const rendasAnalise = rendas.filter((r: any) => !isSpouseIncome(r));
   const isIsento = (txt?: string) => (txt || '').toLowerCase().includes('isento');
   const isAluguel = (txt?: string) => /alug|loca/i.test(txt || '');
   const isDividendo = (txt?: string) => /dividen/i.test(txt || '');
 
-  const rendaTributavelMensal = rendas
+  const rendaTributavelMensal = rendasAnalise
     .filter((r: any) => !isIsento(r?.tributacao))
     .reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
 
-  const rendaIsentaMensal = rendas
+  const rendaIsentaMensal = rendasAnalise
     .filter((r: any) => isIsento(r?.tributacao))
     .reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
 
-  const dividendosIsentosMensais = rendas
+  const dividendosIsentosMensais = rendasAnalise
     .filter((r: any) => isDividendo(r?.descricao || r?.fonte) && isIsento(r?.tributacao))
     .reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
 
-  const doacaoAnual = rendas
+  const doacaoAnual = rendasAnalise
     .filter((r: any) => /(doa[cç][aã]o)/i.test(r?.descricao || r?.fonte))
     .reduce((acc: number, r: any) => acc + (Number(r?.valorAnual || 0)), 0);
 
-  const modeloIR = tributario?.resumo?.modeloIR || 'A avaliar (completo x simplificado)';
+  const modeloIRFallback = tributario?.resumo?.modeloIR || 'A avaliar (completo x simplificado)';
 
   const pgblAnnualMax = Math.max(0, rendaTributavelMensal * 12 * 0.12);
   const pgblMonthlySuggest = pgblAnnualMax / 12;
 
-  const possuiRendaDeAluguel = rendas.some((r: any) => isAluguel(r?.descricao || r?.fonte));
+  const possuiRendaDeAluguel = rendasAnalise.some((r: any) => isAluguel(r?.descricao || r?.fonte));
+
+  // Comparativo IRPF - estados e cálculo
+  const rendaTributavelAnual = Math.max(0, rendaTributavelMensal * 12);
+  const deducoesArray = Array.isArray(data?.tributario?.deducoes) ? data.tributario.deducoes : [];
+  const findDeduction = (tipo: string) => deducoesArray.find((d: any) => (d?.tipo || '').toLowerCase() === tipo.toLowerCase());
+  const dependentesFromDeducao = Number(findDeduction('Dependentes')?.quantidade || 0);
+  const dependentesFromProtecao = Number(data?.protecao?.analiseNecessidades?.numeroDependentes || 0);
+  const numDependentesDefault = dependentesFromDeducao || dependentesFromProtecao || 0;
+
+  const [numDependentes, setNumDependentes] = useState<number>(numDependentesDefault);
+  const despesasArray = Array.isArray(data?.financas?.despesas) ? data.financas.despesas : [];
+  const educacaoFromExpensesMonthly = despesasArray
+    .filter((d: any) => /educa/i.test(d?.tipo || d?.subtipo || ''))
+    .reduce((acc: number, d: any) => acc + (Number(d?.valor) || 0), 0);
+  const educacaoAnualFromExpenses = educacaoFromExpensesMonthly * 12;
+  const [gastoEducacao, setGastoEducacao] = useState<number>(
+    Number(
+      findDeduction('Educacao')?.valor ||
+      findDeduction('Educação')?.valor ||
+      educacaoAnualFromExpenses || 0
+    )
+  );
+  const saudeFromExpensesMonthly = despesasArray
+    .filter((d: any) => /(sa[úu]de|plano|m[eé]dico|odont|hospital)/i.test(d?.tipo || d?.subtipo || ''))
+    .reduce((acc: number, d: any) => acc + (Number(d?.valor) || 0), 0);
+  const saudeAnualFromExpenses = saudeFromExpensesMonthly * 12;
+  const [gastoSaude, setGastoSaude] = useState<number>(
+    Number(
+      findDeduction('Saude')?.valor ||
+      findDeduction('Saúde')?.valor ||
+      saudeAnualFromExpenses || 0
+    )
+  );
+  const [pgblAnual, setPgblAnual] = useState<number>(pgblAnnualMax);
+
+  const irpf = useMemo(() => calculateIrpfComparison({
+    annualTaxableIncome: rendaTributavelAnual,
+    numberOfDependents: numDependentes || 0,
+    educationExpenses: gastoEducacao || 0,
+    healthExpenses: gastoSaude || 0,
+    pgblContributions: pgblAnual || 0,
+  }), [rendaTributavelAnual, numDependentes, gastoEducacao, gastoSaude, pgblAnual]);
+  const modeloIR = irpf?.recommendedModel || modeloIRFallback;
+  const showRecomendacoes = false;
 
   return (
     <section className="min-h-screen py-16 px-4" id="tax">
@@ -116,15 +168,23 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rendas.map((r: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{r?.descricao || r?.fonte || 'Renda'}</TableCell>
-                        <TableCell>{formatCurrency(Number(r?.valor) || 0)}</TableCell>
-                        <TableCell>
-                          <StatusChip status={isIsento(r?.tributacao) ? 'success' : 'warning'} label={r?.tributacao || '—'} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {rendas.map((r: any, idx: number) => {
+                      const spouse = isSpouseIncome(r);
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">
+                            {r?.descricao || r?.fonte || 'Renda'}
+                            {spouse && (
+                              <span className="ml-2 text-xs text-muted-foreground italic">(não contabilizada)</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{formatCurrency(Number(r?.valor) || 0)}</TableCell>
+                          <TableCell>
+                            <StatusChip status={isIsento(r?.tributacao) ? 'success' : 'warning'} label={r?.tributacao || '—'} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 <div className="grid md:grid-cols-3 gap-4 mt-4">
@@ -169,72 +229,165 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
           </HideableCard>
         </div>
 
-        {/* Recomendações Estratégicas */}
+        {/* Comparativo IRPF: Completo vs Simplificado */}
         <div
-          ref={recomendacoesRef as React.RefObject<HTMLDivElement>}
+          ref={comparativoRef as React.RefObject<HTMLDivElement>}
           className="mb-8 animate-on-scroll delay-2"
         >
           <HideableCard
-            id="recomendacoes-estrategicas"
-            isVisible={isCardVisible("recomendacoes-estrategicas")}
-            onToggleVisibility={() => toggleCardVisibility("recomendacoes-estrategicas")}
+            id="comparativo-irpf"
+            isVisible={isCardVisible("comparativo-irpf")}
+            onToggleVisibility={() => toggleCardVisibility("comparativo-irpf")}
             hideControls={hideControls}
           >
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Shield size={18} className="text-financial-info" />
-                Recomendações Estratégicas
+            <CardHeader>
+              <CardTitle className="card-title-standard flex items-center gap-2">
+                <Calculator size={20} className="text-financial-info" />
+                Comparativo IRPF (Completo vs Simplificado)
               </CardTitle>
+              <CardDescription>
+                Informe abaixo os dados anuais dedutíveis para comparar os modelos de declaração.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <h4 className="font-medium mb-2">Eficiência Fiscal na Pessoa Física</h4>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                    <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
-                    <span>
-                      {modeloIR === 'Completo'
-                        ? 'Optar pelo modelo completo de IR para maximizar deduções.'
-                        : modeloIR === 'Simplificado'
-                        ? 'Optar pelo modelo simplificado de IR para alíquota efetiva menor.'
-                        : 'Considerar modelo completo se houver deduções relevantes; caso contrário, avaliar o simplificado.'}
-                    </span>
-                  </li>
-                  <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                    <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
-                    <span>Aportar até 12% da renda tributável em PGBL: {formatCurrency(pgblAnnualMax)} ao ano ({formatCurrency(pgblMonthlySuggest)}/mês).</span>
-                  </li>
-                </ul>
+              <div className="grid md:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Renda Tributável (ano)</div>
+                  <div className="font-medium">{formatCurrency(rendaTributavelAnual)}</div>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Dependentes</label>
+                  <Input type="number" min={0} value={numDependentes}
+                    onChange={(e) => setNumDependentes(Number((e.target as HTMLInputElement).value) || 0)} />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Gastos com Educação (ano)</label>
+                  <CurrencyInput value={gastoEducacao}
+                    onChange={(v) => setGastoEducacao(v)} />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Despesas de Saúde (ano)</label>
+                  <CurrencyInput value={gastoSaude}
+                    onChange={(v) => setGastoSaude(v)} />
+                </div>
               </div>
 
-              <div>
-                <h4 className="font-medium mb-2">Investimentos com Vantagens Tributárias</h4>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                    <div className="h-1.5 w-1.5 rounded-full bg-financial-success"></div>
-                    <span>Priorizar LCI, LCA e debêntures incentivadas (isentas de IR na PF).</span>
-                  </li>
-                </ul>
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="md:col-span-2 bg-muted/50 p-4 rounded-lg border border-border/50">
+                  <div className="text-sm text-muted-foreground mb-1">Contribuições PGBL (ano)</div>
+                  <div className="font-medium">{formatCurrency(pgblAnual)}</div>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg border border-border/50">
+                  <div className="text-sm text-muted-foreground mb-1">Modelo recomendável</div>
+                  <div className="font-medium">{irpf.recommendedModel}</div>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg border border-border/50">
+                  <div className="text-sm text-muted-foreground mb-1">Alíquota efetiva (recomendado)</div>
+                  <div className="font-medium">{(irpf.recommendedModel === 'Completo' ? irpf.complete.effectiveRate : irpf.recommendedModel === 'Simplificado' ? irpf.simplified.effectiveRate : Math.min(irpf.complete.effectiveRate, irpf.simplified.effectiveRate)).toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</div>
+                </div>
               </div>
 
-              <div>
-                <h4 className="font-medium mb-2">Estruturação da Receita e Proteção Patrimonial</h4>
-                <ul className="space-y-2">
-                  {possuiRendaDeAluguel && (
-                    <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                      <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
-                      <span>Avaliar migração de aluguéis para PJ, quando aplicável, visando otimização fiscal.</span>
-                    </li>
-                  )}
-                  <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                    <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
-                    <span>Avaliar constituição de holding patrimonial para eficiência tributária e facilitação sucessória.</span>
-                  </li>
-                </ul>
+              <div className="grid md:grid-cols-2 gap-6">
+                <UiCard className="p-4">
+                  <div className="text-sm text-muted-foreground mb-2">Modelo Completo</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>Base de Cálculo</div>
+                    <div className="text-right font-medium">{formatCurrency(irpf.complete.taxableBase)}</div>
+                    <div>Imposto Devido</div>
+                    <div className="text-right font-medium">{formatCurrency(irpf.complete.taxDue)}</div>
+                    <div>Alíquota Efetiva</div>
+                    <div className="text-right font-medium">{irpf.complete.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</div>
+                  </div>
+                </UiCard>
+                <UiCard className="p-4">
+                  <div className="text-sm text-muted-foreground mb-2">Modelo Simplificado</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>Base de Cálculo</div>
+                    <div className="text-right font-medium">{formatCurrency(irpf.simplified.taxableBase)}</div>
+                    <div>Imposto Devido</div>
+                    <div className="text-right font-medium">{formatCurrency(irpf.simplified.taxDue)}</div>
+                    <div>Alíquota Efetiva</div>
+                    <div className="text-right font-medium">{irpf.simplified.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</div>
+                  </div>
+                </UiCard>
               </div>
             </CardContent>
+            <CardFooter>
+              <div className="text-xs text-muted-foreground">
+                Estimativa com base em faixas e limites aproximados. Confirme com a tabela vigente.
+              </div>
+            </CardFooter>
           </HideableCard>
         </div>
+
+        {/* Recomendações Estratégicas */}
+        {showRecomendacoes && (
+          <div
+            ref={recomendacoesRef as React.RefObject<HTMLDivElement>}
+            className="mb-8 animate-on-scroll delay-2"
+          >
+            <HideableCard
+              id="recomendacoes-estrategicas"
+              isVisible={isCardVisible("recomendacoes-estrategicas")}
+              onToggleVisibility={() => toggleCardVisibility("recomendacoes-estrategicas")}
+              hideControls={hideControls}
+            >
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Shield size={18} className="text-financial-info" />
+                  Recomendações Estratégicas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <h4 className="font-medium mb-2">Eficiência Fiscal na Pessoa Física</h4>
+                  <ul className="space-y-2">
+                    <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                      <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
+                      <span>
+                        {modeloIR === 'Completo'
+                          ? 'Optar pelo modelo completo de IR para maximizar deduções.'
+                          : modeloIR === 'Simplificado'
+                          ? 'Optar pelo modelo simplificado de IR para alíquota efetiva menor.'
+                          : 'Considerar modelo completo se houver deduções relevantes; caso contrário, avaliar o simplificado.'}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                      <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
+                      <span>Aportar até 12% da renda tributável em PGBL: {formatCurrency(pgblAnnualMax)} ao ano ({formatCurrency(pgblMonthlySuggest)}/mês).</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2">Investimentos com Vantagens Tributárias</h4>
+                  <ul className="space-y-2">
+                    <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                      <div className="h-1.5 w-1.5 rounded-full bg-financial-success"></div>
+                      <span>Priorizar LCI, LCA e debêntures incentivadas (isentas de IR na PF).</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-2">Estruturação da Receita e Proteção Patrimonial</h4>
+                  <ul className="space-y-2">
+                    {possuiRendaDeAluguel && (
+                      <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                        <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
+                        <span>Avaliar migração de aluguéis para PJ, quando aplicável, visando otimização fiscal.</span>
+                      </li>
+                    )}
+                    <li className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                      <div className="h-1.5 w-1.5 rounded-full bg-financial-info"></div>
+                      <span>Avaliar constituição de holding patrimonial para eficiência tributária e facilitação sucessória.</span>
+                    </li>
+                  </ul>
+                </div>
+              </CardContent>
+            </HideableCard>
+          </div>
+        )}
 
       </div>
     </section>

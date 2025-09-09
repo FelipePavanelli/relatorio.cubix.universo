@@ -334,11 +334,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
                         <span className="text-sm">{inv.percentual}%</span>
-                        <StatusChip
-                          status={inv.risco === 'Baixo' ? 'success' : inv.risco === 'Médio' ? 'warning' : 'danger'}
-                          label={inv.risco}
-                          className="text-xs"
-                        />
+                        {/* Risk chip removed by request */}
                       </div>
                     </div>
                   ))}
@@ -380,11 +376,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
                         <span className="text-sm">{inv.percentual}%</span>
-                        <StatusChip
-                          status={inv.risco === 'Baixo' ? 'success' : inv.risco === 'Médio' ? 'warning' : 'danger'}
-                          label={inv.risco}
-                          className="text-xs"
-                        />
+                        {/* Risk chip removed by request */}
                       </div>
                     </div>
                   ))}

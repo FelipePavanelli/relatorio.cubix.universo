@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 /* Heading styles (project-wide) */
 .heading-1 { @apply text-5xl md:text-6xl font-bold; }
 .heading-2 { @apply text-4xl font-bold; }
 .heading-3 { @apply text-xl font-semibold; }
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;

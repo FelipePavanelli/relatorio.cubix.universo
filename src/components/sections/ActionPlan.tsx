@@ -334,10 +334,8 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
                     ))}
                   </ul>
                   <div className="space-y-2">
-                    <Button asChild size="sm" className="w-full group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
-                      <a href={specialistUrl} target="_blank" rel="noopener noreferrer">
-                        Acionamento do Especialista
-                      </a>
+                    <Button size="sm" className="w-full" disabled title="Em breve">
+                      Em breve
                     </Button>
                     {(fase.titulo === "Projetos Imobilizados" || fase.titulo === "Proteção Patrimonial") && (
                       <Button asChild size="sm" variant="outline" className="w-full">

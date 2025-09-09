@@ -48,6 +48,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
   const capitalDoencasGraves = rendaMensal * 12;
   const capitalCirurgia = 50000; // base ajustável
 
+  // Exibir/ocultar coluna "Apólice Atual"
+  const showApoliceAtual = false;
+
   // Formação dos filhos: gasto educação mensal × 13 × anos restantes até 21 anos
   const gastoEducacaoMensal = Number(protectionData?.analiseNecessidades?.gastoEducacaoMensal) || 0;
   const idadesDependentes: number[] = Array.isArray((protectionData?.analiseNecessidades as any)?.idadesDependentes)
@@ -100,40 +103,30 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="text-lg font-medium mb-3">Parâmetros Principais</h4>
-                <ul className="space-y-3">
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Renda Anual (base)</span>
-                    <span className="font-medium">{formatCurrency(rendaAnualBase)}</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Patrimônio Total</span>
-                    <span className="font-medium">{formatCurrency(patrimonioTotal)}</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Participação Empresarial</span>
-                    <span className="font-medium">{protectionData.analiseNecessidades.atividadeEmpresarial}</span>
-                  </li>
-                </ul>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Renda Anual (base)</div>
+                <div className="text-xl font-semibold mt-1">{formatCurrency(rendaAnualBase)}</div>
               </div>
-              <div>
-                <h4 className="text-lg font-medium mb-3">Dados Complementares</h4>
-                <ul className="space-y-3">
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Dependentes</span>
-                    <span className="font-medium">{protectionData?.analiseNecessidades?.numeroDependentes} ({protectionData?.analiseNecessidades?.tiposDependentes?.join(", ") ?? ""})</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Anos até Aposentadoria</span>
-                    <span className="font-medium">{anosAteAposentadoria} anos</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Viagens Internacionais</span>
-                    <span className="font-medium">{protectionData.analiseNecessidades.viagensInternacionais}</span>
-                  </li>
-                </ul>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Patrimônio Total</div>
+                <div className="text-xl font-semibold mt-1">{formatCurrency(patrimonioTotal)}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Participação Empresarial</div>
+                <div className="text-xl font-semibold mt-1">{String(protectionData?.analiseNecessidades?.atividadeEmpresarial ?? '—')}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Dependentes</div>
+                <div className="text-xl font-semibold mt-1">{protectionData?.analiseNecessidades?.numeroDependentes} ({protectionData?.analiseNecessidades?.tiposDependentes?.join(", ") ?? ""})</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Anos até Aposentadoria</div>
+                <div className="text-xl font-semibold mt-1">{anosAteAposentadoria} anos</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Viagens Internacionais</div>
+                <div className="text-xl font-semibold mt-1">{String(protectionData?.analiseNecessidades?.viagensInternacionais ?? '—')}</div>
               </div>
             </div>
             {false && (
@@ -148,6 +141,54 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                 <span> Cirurgia: valor base de R$ 50.000 (ajustável).</span>
               </div>
             )}
+          </CardContent>
+        </HideableCard>
+
+        {/* Dependência de Renda e Revisão */}
+        <HideableCard
+          id="dependencia-renda"
+          isVisible={isCardVisible("dependencia-renda")}
+          onToggleVisibility={() => toggleCardVisibility("dependencia-renda")}
+          hideControls={hideControls}
+          className="mb-10"
+        >
+          <CardHeader>
+            <CardTitle>Dependência de Renda e Revisão</CardTitle>
+            <CardDescription>Informações declaradas sobre a dependência de renda e interesse de revisão</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Dependência da renda ativa</div>
+                <div className="text-xl font-semibold mt-1">{protectionData?.dependenciaRenda === true ? 'Sim' : protectionData?.dependenciaRenda === false ? 'Não' : '—'}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Impacto da perda de renda</div>
+                <div className="text-xl font-semibold mt-1">{protectionData?.impactoPerdaRenda || '—'}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Deseja revisão das proteções</div>
+                <div className="text-xl font-semibold mt-1">{protectionData?.desejaRevisao === true ? 'Sim' : protectionData?.desejaRevisao === false ? 'Não' : '—'}</div>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6 mt-6">
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Patrimônio em nome próprio</div>
+                <div className="text-xl font-semibold mt-1">{formatCurrency(Number(protectionData?.patrimonioEmNomeProprio || 0))}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Solução de inventário</div>
+                <div className="text-xl font-semibold mt-1">{protectionData?.solucaoInventario || '—'}</div>
+              </div>
+              <div className="p-4 rounded-lg border bg-muted/20">
+                <div className="text-sm text-muted-foreground">Soluções existentes</div>
+                <div className="text-sm mt-1 text-foreground">
+                  {Array.isArray(protectionData?.solucoesExistentes) && protectionData.solucoesExistentes.length > 0
+                    ? protectionData.solucoesExistentes.join(', ')
+                    : 'Nenhuma informada'}
+                </div>
+              </div>
+            </div>
           </CardContent>
         </HideableCard>
 
@@ -184,7 +225,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                     <tr>
                       <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
                       <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
-                      <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
+                      {showApoliceAtual && (
+                        <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
+                      )}
                       <th className="px-2 py-2 text-right font-semibold">Total de Capital Sugerido</th>
                     </tr>
                   </thead>
@@ -197,7 +240,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalCustosInventario)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalCustosInventario)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -208,7 +253,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
                     </tr>
                     
@@ -220,7 +267,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -231,7 +280,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -242,7 +293,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalAssistenciaFuneral)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalAssistenciaFuneral)}</td>
                     </tr>
                   </tbody>
@@ -282,7 +335,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                     <tr>
                       <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
                       <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
-                      <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
+                      {showApoliceAtual && (
+                        <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
+                      )}
                       <th className="px-2 py-2 text-right font-semibold">Total de Capital Sugerido</th>
                     </tr>
                   </thead>
@@ -295,7 +350,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalInvalidezPermanente)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalInvalidezPermanente)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -306,7 +363,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(valorDiarioDIT)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(valorDiarioDIT)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -317,7 +376,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalDoencasGraves)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalDoencasGraves)}</td>
                     </tr>
                     <tr className="bg-white hover:bg-muted/50 rounded">
@@ -328,7 +389,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         </div>
                       </td>
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalCirurgia)}</td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      {showApoliceAtual && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                      )}
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalCirurgia)}</td>
                     </tr>
                   </tbody>

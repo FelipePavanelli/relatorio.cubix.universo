@@ -18,6 +18,7 @@ interface FinanceSummary {
   composicaoPatrimonial: Record<string, number>;
   ativos: Array<{ tipo: string; valor: number; classe?: string }>;
   passivos: Array<{ tipo: string; valor: number }>;
+  formatoTrabalho?: string;
 }
 
 interface FinancialSummaryProps {
@@ -33,8 +34,16 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
-  // Calculate total income from all sources
-  const totalIncome = data.rendas.reduce((sum, renda) => sum + renda.valor, 0);
+  // Helpers: identify renda do cônjuge para não somar nos totais
+  const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isSpouseIncome = (renda: { fonte?: string; descricao?: string }) => {
+    const label = normalize(renda?.descricao || renda?.fonte || '');
+    return label.includes('conjuge');
+  };
+
+  // Calculate total income excluding spouse income
+  const incomesForTotals = (data.rendas || []).filter(r => !isSpouseIncome(r));
+  const totalIncome = incomesForTotals.reduce((sum, renda: any) => sum + (Number(renda?.valor) || 0), 0);
 
   // Valores derivados (mensal x anual)
   const totalIncomeAnnual = totalIncome * 12;
@@ -82,27 +91,15 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
           className="mb-10 animate-on-scroll"
         >
           <div className="grid md:grid-cols-12 gap-6">
-            {/* Investimentos Financeiros */}
-            <Card className="p-6 text-center relative h-full col-span-12 md:col-span-4">
-              <h3 className="text-muted-foreground text-sm mb-1">Investimentos Financeiros</h3>
-              <div className="text-3xl font-bold mb-1">
-                {formatCurrency(
-                  data.ativos.find(ativo => ativo.tipo === "Investimentos")?.valor || 0
-                )}
-              </div>
-              {/* <StatusChip
-                status="success"
-                label="Sólido"
-                icon={<TrendingUp size={14} />}
-              /> */}
-            </Card>
-
             {/* Renda Mensal */}
-            <Card className="p-6 text-center h-full col-span-12 md:col-span-4">
+            <Card className="p-6 text-center h-full col-span-12 md:col-span-6">
               <h3 className="text-muted-foreground text-sm mb-1">Renda Mensal</h3>
               <div className="text-3xl font-bold mb-1">
                 {formatCurrency(totalIncome)}
               </div>
+              {data?.formatoTrabalho && (
+                <div className="text-xs text-muted-foreground mt-1">Formato de trabalho: {data.formatoTrabalho}</div>
+              )}
             </Card>
 
             {/* Excedente Mensal */}
@@ -111,7 +108,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
               isVisible={isCardVisible("financial-resumo")}
               onToggleVisibility={() => toggleCardVisibility("financial-resumo")}
               hideControls={hideControls}
-              className="p-6 text-center h-full col-span-12 md:col-span-4"
+              className="p-6 text-center h-full col-span-12 md:col-span-6"
             >
               <h3 className="text-muted-foreground text-sm mb-1">Excedente Mensal</h3>
               <div className="text-3xl font-bold mb-1">
@@ -179,20 +176,26 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                   <div>
                     <h4 className="font-medium mb-2">Rendas</h4>
                     <div className="space-y-2">
-                      {data.rendas.map((renda, index) => (
-                        <div key={index} className="flex justify-between items-start">
-                          <div className="text-sm">
-                            <div className="font-medium">{renda.descricao || renda.fonte || 'Renda'}</div>
-                            {renda.tributacao && (
-                              <div className="text-xs text-muted-foreground">{renda.tributacao}</div>
-                            )}
+                      {data.rendas.map((renda, index) => {
+                        const spouse = isSpouseIncome(renda);
+                        return (
+                          <div key={index} className="flex justify-between items-start">
+                            <div className="text-sm">
+                              <div className="font-medium">{renda.descricao || renda.fonte || 'Renda'}</div>
+                              {renda.tributacao && (
+                                <div className="text-xs text-muted-foreground">{renda.tributacao}</div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div className="text-sm font-medium">{formatCurrency(renda.valor)} / mês</div>
+                              <div className="text-sm font-medium text-muted-foreground">{formatCurrency((renda as any)?.valorAnual ?? (renda.valor * 12))} / ano</div>
+                              {spouse && (
+                                <div className="text-xs text-muted-foreground italic">(não contabilizada)</div>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-sm font-medium">{formatCurrency(renda.valor)} / mês</div>
-                            <div className="text-sm font-medium text-muted-foreground">{formatCurrency((renda as any)?.valorAnual ?? (renda.valor * 12))} / ano</div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                   <div>

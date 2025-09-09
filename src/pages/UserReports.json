@@ -10,7 +10,13 @@
 		"codigo_xp": "XP987654",
 		"residencia": "São Paulo - SP",
 		"estadoCivil": "Casado",
-		"regimeCasamento": "Comunhão parcial de bens"
+		"regimeCasamento": "Comunhão parcial de bens",
+		"profissao": "Empresário",
+		"tempo_profissao": "10 anos",
+		"dependentes": [
+			{ "tipo": "Filho", "idade": 3 }
+		],
+		"cep": "04563-013"
 	},
 	"financas": {
 		"ativos": [

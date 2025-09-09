@@ -32,6 +32,7 @@ const ALL_CARD_IDS = [
     "simulador-financiamento",
     "impacto-casa-praia",
     "diagnostico-tributario",
+    "comparativo-irpf",
     "recomendacoes-estrategicas"
 ];
 
