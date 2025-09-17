@@ -412,7 +412,7 @@ const FinancingSimulator: React.FC<FinancingSimulatorProps> = ({
             <thead className="bg-muted/30">
               <tr>
                 <th className="py-2 px-3 text-left font-medium">Estratégia</th>
-                <th className="py-2 px-3 text-center font-medium">Parcela Mensal</th>
+                <th className="py-2 px-3 text-center font-medium">Parcela Mensal (Mês 1)</th>
                 <th className="py-2 px-3 text-center font-medium">Total Pago</th>
                 <th className="py-2 px-3 text-center font-medium">Custo Total</th>
                 <th className="py-2 px-3 text-center font-medium">Economia</th>

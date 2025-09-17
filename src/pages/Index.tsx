@@ -260,6 +260,34 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
     });
   };
 
+  const getPriorities = () => {
+    const labels: Record<string, string> = {
+      aposentadoria: 'Aposentadoria',
+      educacao_filhos: 'Reserva para educação dos filhos',
+      reserva_emergencia: 'Reserva de emergência',
+      projetos_sonhos: 'Projetos e sonhos financeiros',
+      protecao_familiar: 'Proteção familiar e patrimonial no caso de morte',
+      manutencao_padrao_vida: 'Manutenção do padrão de vida: no caso de acidente, invalidez ou doença',
+    };
+    const source = (userReports as any)?.prioridades ?? (localUserReports as any)?.prioridades;
+    if (!source || typeof source !== 'object') {
+      return [
+        { item: 'Proteção familiar e patrimonial no caso de morte', score: 10 },
+        { item: 'Reserva para educação dos filhos', score: 9 },
+        { item: 'Manutenção do padrão de vida: no caso de acidente, invalidez ou doença', score: 9 },
+        { item: 'Aposentadoria', score: 8 },
+        { item: 'Reserva de emergência', score: 7 },
+        { item: 'Projetos e sonhos financeiros', score: 6 },
+      ];
+    }
+    return Object.entries(source)
+      .map(([key, val]) => ({
+        item: labels[key] || key,
+        score: Number(val) || 0,
+      }))
+      .sort((a, b) => b.score - a.score);
+  };
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -332,14 +360,7 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
                 <CoverPage 
                   clientData={getClientData().cliente} 
                   objetivos={getClientData().objetivos}
-                  priorities={[
-                    { item: "Proteção familiar e patrimonial no caso de morte", score: 10 },
-                    { item: "Reserva para educação dos filhos", score: 9 },
-                    { item: "Manutenção do padrão de vida: no caso de acidente, invalidez ou doença", score: 9 },
-                    { item: "Aposentadoria", score: 8 },
-                    { item: "Reserva de emergência", score: 7 },
-                    { item: "Projetos e sonhos financeiros", score: 6 }
-                  ]}
+                  priorities={getPriorities()}
                   retirementPlan={{
                     idadePlanejada: getClientData().aposentadoria.idadeAposentadoria,
                     rendaMensalDesejada: getClientData().aposentadoria.rendaMensalDesejada,

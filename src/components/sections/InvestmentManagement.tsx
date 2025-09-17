@@ -5,6 +5,7 @@ import StatusChip from '@/components/ui/StatusChip';
 import DonutChart from '@/components/charts/DonutChart';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Target, BarChart3, PieChart } from 'lucide-react';
+import { chartPalette } from '@/theme/chartPalette';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
@@ -63,22 +64,23 @@ interface InvestmentManagementProps {
   hideControls?: boolean;
 }
 
-// Cores para diferentes tipos de investimentos
+// Mapeia categorias a tons derivados do brand para manter coerência visual
+// Usar variações próximas do violeta (chartPalette.series)
 const investmentColors: Record<string, string> = {
-  'Renda Fixa': '#60A5FA',           // Azul
-  'Renda Variável': '#34D399',       // Verde
-  'Multimercado': '#22D3EE',         // Ciano
-  'Outros': '#3B82F6',               // Azul claro
-  'Fundos Imobiliários': '#2563eb',  // Azul
-  'Previdência': '#F59E0B',          // Amarelo
-  'Tesouro Direto': '#EF4444',       // Vermelho
-  'CDB': '#EC4899',                  // Rosa
-  'LCI/LCA': '#1d4ed8',              // Azul escuro
-  'Ações': '#F97316',                // Laranja
-  'Fundos de Investimento': '#10B981', // Esmeralda
-  'Criptomoedas': '#6366F1',         // Índigo
-  'Ouro': '#FCD34D',                 // Amarelo claro
-  'Internacional': '#06B6D4',        // Ciano
+  'Renda Fixa': chartPalette.series[0],
+  'Renda Variável': chartPalette.series[1],
+  'Multimercado': chartPalette.series[2],
+  'Outros': chartPalette.series[3],
+  'Fundos Imobiliários': chartPalette.series[4],
+  'Previdência': chartPalette.series[5],
+  'Tesouro Direto': chartPalette.series[6],
+  'CDB': chartPalette.series[7],
+  'LCI/LCA': chartPalette.tint(0.10),
+  'Ações': chartPalette.shade(0.10),
+  'Fundos de Investimento': chartPalette.tint(0.20),
+  'Criptomoedas': chartPalette.shade(0.20),
+  'Ouro': chartPalette.tint(0.30),
+  'Internacional': chartPalette.tint(0.15),
 };
 
 // Função para obter uma cor baseada no tipo de investimento
@@ -358,7 +360,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
               <div className="p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Target size={20} className="text-muted-foreground" />
-                  <h3 className="text-xl font-semibold">Sugestão Alta Vista</h3>
+                  <h3 className="text-xl font-semibold">Sugestão de Investimentos</h3>
                 </div>
                 <div className="mb-4">
                   <div className="text-2xl font-bold mb-1">{formatCurrency(totalSuggested)}</div>

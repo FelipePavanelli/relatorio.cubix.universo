@@ -20,7 +20,7 @@
     --popover: 220 15% 100%;
     --popover-foreground: 220 100% 14%;
 
-    --primary: 210 97% 25%;
+    --primary: 217 91% 40%;        /* Univalores blue #1e40af */
     --primary-foreground: 210 40% 98%;
 
     --secondary: 220 15% 96%;
@@ -29,7 +29,7 @@
     --muted: 220 15% 90%;
     --muted-foreground: 220 25% 40%;
 
-    --accent: 210 95% 40%;
+    --accent: 38 92% 50%;          /* Univalores gold #f59e0b */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 354 50% 60%;
@@ -52,7 +52,7 @@
     --popover: 210 70% 15%;
     --popover-foreground: 220 15% 93%;
 
-    --primary: 210 95% 45%;
+    --primary: 217 91% 50%;        /* Univalores blue lighter for dark mode */
     --primary-foreground: 220 15% 100%;
 
     --secondary: 210 50% 20%;
@@ -61,7 +61,7 @@
     --muted: 210 30% 20%;
     --muted-foreground: 210 15% 70%;
 
-    --accent: 210 95% 45%;
+    --accent: 38 92% 60%;          /* Univalores gold lighter for dark mode */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 354 45% 55%;

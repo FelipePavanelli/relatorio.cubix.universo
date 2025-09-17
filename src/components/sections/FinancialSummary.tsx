@@ -8,6 +8,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
 import { Card } from '@/components/ui/card';
 import { ChartContainer } from '@/components/ui/chart';
+import { chartPalette } from '@/theme/chartPalette';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 
 interface FinanceSummary {
@@ -57,10 +58,11 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
   const totalPassivosLista = (data?.passivos || []).reduce((s, p) => s + (Number(p?.valor) || 0), 0);
   const patrimonioLiquidoResumo = totalAtivosLista - totalPassivosLista;
 
+  // Tons próximos do violeta (paleta da marca)
   const barData = [
-    { nome: 'Renda', valor: totalIncome, color: '#16a34a' },
-    { nome: 'Despesas', valor: totalExpensesMonthly, color: '#ef4444' },
-    { nome: 'Excedente', valor: surplusMonthly, color: '#2563eb' },
+    { nome: 'Renda', valor: totalIncome, color: chartPalette.series[0] },
+    { nome: 'Despesas', valor: totalExpensesMonthly, color: chartPalette.series[3] },
+    { nome: 'Excedente', valor: surplusMonthly, color: chartPalette.series[5] },
   ];
 
   return (
@@ -149,7 +151,12 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                         <Tooltip formatter={(value: number) => [formatCurrency(value), '']} wrapperStyle={{ outline: 'none' }} />
                         <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
                           {barData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              stroke="rgba(0,0,0,0.25)"
+                              strokeWidth={1}
+                            />
                           ))}
                         </Bar>
                       </BarChart>

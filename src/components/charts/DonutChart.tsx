@@ -71,12 +71,12 @@ const DonutChart: React.FC<DonutChartProps> = ({
                 <Cell 
                   key={`cell-${index}`} 
                   fill={entry.color} 
-                  strokeWidth={activeIndex === index ? 2 : 0}
-                  stroke={entry.color}
+                  strokeWidth={1.25}
+                  stroke="rgba(255,255,255,0.9)"
                   style={{ 
-                    filter: activeIndex === index ? 'drop-shadow(0 0 3px rgba(0,0,0,0.2))' : 'none',
-                    opacity: activeIndex !== null && activeIndex !== index ? 0.7 : 1,
-                    transition: 'opacity 0.3s, filter 0.3s'
+                    filter: activeIndex === index ? 'drop-shadow(0 0 3px rgba(0,0,0,0.25))' : 'none',
+                    opacity: activeIndex !== null && activeIndex !== index ? 0.65 : 1,
+                    transition: 'opacity 0.25s, filter 0.25s'
                   }}
                 />
               ))}
@@ -98,7 +98,7 @@ const DonutChart: React.FC<DonutChartProps> = ({
           >
             <div 
               className="w-3 h-3 rounded-sm" 
-              style={{ backgroundColor: entry.color }}
+              style={{ backgroundColor: entry.color, border: '1px solid rgba(0,0,0,0.25)' }}
             />
             <span>{entry.name} - {entry.value}%</span>
           </div>

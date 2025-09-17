@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Slider } from "@/components/ui/slider";
 import { Line } from 'react-chartjs-2';
+import { chartPalette } from '@/theme/chartPalette';
 import { Badge } from "@/components/ui/badge";
 import {
   Chart as ChartJS,
@@ -227,16 +228,16 @@ const RealEstateSimulator: React.FC = () => {
           {
             label: 'Valor da Parcela (SAC)',
             data: parcelasFinanciamento.map(p => p.parcela),
-            borderColor: '#2563eb',
-            backgroundColor: 'rgba(37,99,235,0.1)',
+            borderColor: chartPalette.primary,
+            backgroundColor: chartPalette.alpha[16],
             fill: true,
             tension: 0.1,
           },
           {
             label: 'Saldo Devedor',
             data: saldoDevedorFinanciamento,
-            borderColor: '#dc2626',
-            backgroundColor: 'rgba(220,38,38,0.1)',
+            borderColor: chartPalette.emphasis,
+            backgroundColor: chartPalette.alpha[12],
             fill: false,
             tension: 0.1,
             yAxisID: 'y1',
@@ -250,8 +251,8 @@ const RealEstateSimulator: React.FC = () => {
           {
             label: 'Parcela Consórcio',
             data: parcelasConsorcio.map(p => p.parcela),
-            borderColor: '#22c55e',
-            backgroundColor: 'rgba(34,197,94,0.1)',
+            borderColor: chartPalette.secondary,
+            backgroundColor: chartPalette.alpha[12],
             fill: true,
             tension: 0.1,
           },
@@ -263,8 +264,8 @@ const RealEstateSimulator: React.FC = () => {
           {
             label: 'Valor do Investimento',
             data: evolucaoInvestimento.map(p => p.valor),
-            borderColor: '#f59e0b',
-            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderColor: chartPalette.tint(0.25),
+            backgroundColor: chartPalette.alpha[12],
             fill: true,
             tension: 0.1,
           },

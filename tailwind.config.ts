@@ -62,23 +62,35 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// Financial report specific colors
-				financial: {
-					success: '#7EC866',
-					warning: '#FFC971',
-					danger: '#C8686D',
-					info: '#0353A4',
-					highlight: '#FFC971',
-					muted: '#9CA3AF'
+				// Univalores brand colors
+				univalores: {
+					primary: '#1e40af',    // Univalores blue
+					secondary: '#059669',  // Univalores green
+					accent: '#f59e0b',     // Univalores gold
+					'primary-light': '#3b82f6',
+					'primary-dark': '#1e3a8a',
+					'secondary-light': '#10b981',
+					'secondary-dark': '#047857',
+					'accent-light': '#fbbf24',
+					'accent-dark': '#d97706'
 				},
-				// Investment management specific colors
+				// Financial report specific colors (using Univalores palette)
+				financial: {
+					success: '#059669',    // Univalores green
+					warning: '#f59e0b',    // Univalores gold
+					danger: '#dc2626',     // Red for danger
+					info: '#1e40af',       // Univalores blue
+					highlight: '#f59e0b',  // Univalores gold
+					muted: '#6b7280'       // Neutral gray
+				},
+				// Investment management specific colors (using Univalores palette)
 				investment: {
-					primary: '#6366F1',
-					success: '#10B981',
-					warning: '#F59E0B',
-					danger: '#EF4444',
-					info: '#3B82F6',
-					accent: '#8B5CF6'
+					primary: '#1e40af',    // Univalores blue
+					success: '#059669',    // Univalores green
+					warning: '#f59e0b',    // Univalores gold
+					danger: '#dc2626',     // Red for danger
+					info: '#1e40af',       // Univalores blue
+					accent: '#f59e0b'      // Univalores gold
 				}
 			},
 			borderRadius: {
