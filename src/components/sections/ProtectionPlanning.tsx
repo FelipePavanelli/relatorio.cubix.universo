@@ -182,7 +182,7 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
               </div>
               <div className="p-4 rounded-lg border bg-muted/20">
                 <div className="text-sm text-muted-foreground">Soluções existentes</div>
-                <div className="text-sm mt-1 text-foreground">
+                <div className="text-xl font-semibold mt-1">
                   {Array.isArray(protectionData?.solucoesExistentes) && protectionData.solucoesExistentes.length > 0
                     ? protectionData.solucoesExistentes.join(', ')
                     : 'Nenhuma informada'}
@@ -224,7 +224,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                   <thead className="bg-muted">
                     <tr>
                       <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
-                      <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
+                      {false && (
+                        <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
+                      )}
                       {showApoliceAtual && (
                         <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
                       )}
@@ -239,7 +241,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">patrimônio total × 12%</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalCustosInventario)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalCustosInventario)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -252,7 +256,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda anual × anos (limite 200 meses)</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -266,7 +272,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">educação mensal × 13 × anos até 21</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -279,7 +287,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">mesmo valor de padrão de vida</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -292,7 +302,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">valor fixo de R$ 12.000</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalAssistenciaFuneral)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalAssistenciaFuneral)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -334,7 +346,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                   <thead className="bg-muted">
                     <tr>
                       <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
-                      <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
+                      {false && (
+                        <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
+                      )}
                       {showApoliceAtual && (
                         <th className="px-2 py-2 text-right font-semibold">Apólice Atual</th>
                       )}
@@ -349,7 +363,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda mensal × 1,25 × 60</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalInvalidezPermanente)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalInvalidezPermanente)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -362,7 +378,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda mensal ÷ 30</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(valorDiarioDIT)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(valorDiarioDIT)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -375,7 +393,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda mensal × 12</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalDoencasGraves)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalDoencasGraves)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}
@@ -388,7 +408,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">valor base de R$ 50.000</span>
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalCirurgia)}</td>
+                      {false && (
+                        <td className="px-2 py-2 text-right">{formatCurrency(capitalCirurgia)}</td>
+                      )}
                       {showApoliceAtual && (
                         <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
                       )}

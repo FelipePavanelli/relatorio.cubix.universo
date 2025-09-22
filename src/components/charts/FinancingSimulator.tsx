@@ -446,28 +446,30 @@ const FinancingSimulator: React.FC<FinancingSimulatorProps> = ({
           </table>
         </div>
 
-        {/* Detalhes dos Custos */}
-        <div className="mt-6 grid md:grid-cols-3 gap-4">
-          {Object.entries(estrategias).map(([key, estrategia]) => (
-            <div key={key} className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/5">
-              <h4 className="text-sm font-semibold">{estrategia.nome}</h4>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span>Juros Nominal:</span>
-                  <span>{formatCurrency(estrategia.detalhes.jurosNominal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Custo Oportunidade:</span>
-                  <span>{formatCurrency(estrategia.detalhes.custoOportunidade)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Inflação:</span>
-                  <span>{(estrategia.detalhes.inflacao * 100).toFixed(1)}%</span>
+        {/* Detalhes dos Custos - Oculto */}
+        {false && (
+          <div className="mt-6 grid md:grid-cols-3 gap-4">
+            {Object.entries(estrategias).map(([key, estrategia]) => (
+              <div key={key} className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/5">
+                <h4 className="text-sm font-semibold">{estrategia.nome}</h4>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span>Juros Nominal:</span>
+                    <span>{formatCurrency(estrategia.detalhes.jurosNominal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Custo Oportunidade:</span>
+                    <span>{formatCurrency(estrategia.detalhes.custoOportunidade)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Inflação:</span>
+                    <span>{(estrategia.detalhes.inflacao * 100).toFixed(1)}%</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

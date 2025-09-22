@@ -197,7 +197,7 @@ const BeachHouse: React.FC<BeachHouseProps> = ({ data, hideControls }) => {
             <CardHeader>
               <CardTitle className="text-2xl font-semibold flex items-center">
                 <Calculator size={22} className="mr-2 text-accent" />
-                Simulador de Estratégias
+                Compare
               </CardTitle>
               <CardDescription>
                 Compare diferentes estratégias de aquisição do imóvel
