@@ -7,6 +7,9 @@ export interface LiquidityEventApi {
     idade: number;
     tipo: 'entrada' | 'saida';
     valor: number;
+    recorrencia: 'once' | 'annual' | 'monthly';
+    termino: number | null;
+    status: boolean;
 }
 
 // Listar eventos de liquidez por session_id

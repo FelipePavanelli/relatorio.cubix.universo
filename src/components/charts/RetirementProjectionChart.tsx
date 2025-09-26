@@ -908,10 +908,11 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
           startAge: Number(event.idade),
           value: Number(event.valor),
           isPositive: event.tipo === 'entrada',
-          recurrence: 'once',
-          endAge: null,
-          enabled: true
+          recurrence: event.recorrencia || 'once',
+          endAge: event.termino || null,
+          enabled: event.status || true
         }));
+        console.log('events', events);
         setLiquidityEvents(events);
       } catch (error) {
         console.error('Error loading liquidity events:', error);
@@ -1028,12 +1029,16 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   // Atualizar API ao adicionar/remover evento
   const syncEventsToApi = async (events: LiquidityEvent[]) => {
     const sessionId = getSessionId();
+    console.log('sessionId', sessionId);
     if (!sessionId) return;
-
+    console.log('teste');
     try {
+      console.log('syncEventsToApi', events);
       let apiEvents: LiquidityEventApi[];
+      console.log('apiEvents', events);
       if (events.length === 0) {
         // Se não houver eventos, envie apenas o session_id
+        console.log('apiEvents', [{ session_id: sessionId } as LiquidityEventApi]);
         apiEvents = [{ session_id: sessionId } as LiquidityEventApi];
       } else {
         apiEvents = events.map(e => ({
@@ -1042,7 +1047,11 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
           idade: e.startAge ?? e.age ?? currentAge + 1,
           tipo: e.isPositive ? 'entrada' : 'saida',
           valor: e.value,
+          recorrencia: e.recurrence,
+          termino: e.endAge,
+          status: e.enabled
         }));
+        console.log('apiEvents', apiEvents);
       }
       await saveLiquidityEvents(apiEvents);
     } catch (error) {
@@ -1055,7 +1064,16 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     const endAge = newEventRecurrence === 'once' ? undefined : (newEventEndAge === '' ? undefined : Number(newEventEndAge));
     if (!newEventName || startAge < currentAge || newEventValue <= 0) return;
     if (endAge !== undefined && endAge < startAge) return;
-
+    console.log('newEvent', {
+      id: Date.now().toString(),
+      name: newEventName,
+      value: newEventValue,
+      isPositive: newEventType === 'positive',
+      recurrence: newEventRecurrence,
+      startAge: startAge,
+      endAge: endAge ?? null,
+      enabled: true
+    });
     const newEvent: LiquidityEvent = {
       id: Date.now().toString(),
       name: newEventName,
@@ -1068,6 +1086,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     };
 
     const updatedEvents = [...liquidityEvents, newEvent];
+    console.log('updatedEvents', updatedEvents);
     setLiquidityEvents(updatedEvents);
     setNewEventName('');
     setNewEventStartAge(currentAge + 5);
