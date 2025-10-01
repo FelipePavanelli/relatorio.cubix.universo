@@ -131,11 +131,11 @@ const FloatingActions: React.FC<FloatingActionsProps> = ({ className, userReport
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Link:</span>
                   <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md">
-                    <span className="text-sm">{`https://relatorio.cubix.altavistainvest.com.br/relatorio-cliente/?sessionId=${sessionId}`}</span>
+                    <span className="text-sm">{`https://relatorio.universo.univalores.com.br/relatorio-cliente/?sessionId=${sessionId}`}</span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => copyToClipboard(`https://relatorio.cubix.altavistainvest.com.br/relatorio-cliente/?sessionId=${sessionId}`)}
+                      onClick={() => copyToClipboard(`https://relatorio.universo.univalores.com.br/relatorio-cliente/?sessionId=${sessionId}`)}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
