@@ -334,9 +334,17 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
                     ))}
                   </ul>
                   <div className="space-y-2">
-                    <Button size="sm" className="w-full" disabled title="Em breve">
-                      Em breve
-                    </Button>
+                    {fase.titulo === "Diagnóstico de Alocação" ? (
+                      <Button asChild size="sm" className="w-full">
+                        <a href="https://outlook.office.com/bookwithme/user/a6966fc789e84b01a9ea117c59722594%40altavistawm.com.br?anonymous&ismsaljsauthenabled" target="_blank" rel="noopener noreferrer">
+                          Agendar Diagnóstico
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button size="sm" className="w-full" disabled title="Em breve">
+                        Em breve
+                      </Button>
+                    )}
                     {(fase.titulo === "Projetos Imobilizados" || fase.titulo === "Proteção Patrimonial") && (
                       <Button asChild size="sm" variant="outline" className="w-full">
                         <a href="https://homolog.universo.univalores.com.br/modulo/univalores-credito" target="_blank" rel="noopener noreferrer">

@@ -219,8 +219,14 @@ const CoverPage: React.FC<CoverPageProps> = ({
               <h3 className="text-lg font-semibold mb-2">Contexto do planejamento</h3>
               <p className="text-sm text-muted-foreground">
                 Nosso plano considera como prioridades iniciais {prioridadesTop.join(', ')}.
-                Além disso, sua aposentadoria está planejada aos <span className="font-medium text-foreground">{idadePlanejada}</span> anos
-                com renda pretendida de <span className="font-medium text-foreground">{formatCurrency(rendaMensalDesejada)}</span> por mês.
+                {idadePlanejada > 0 && rendaMensalDesejada > 0 ? (
+                  <>
+                    Além disso, sua aposentadoria está planejada aos <span className="font-medium text-foreground">{idadePlanejada}</span> anos
+                    com renda pretendida de <span className="font-medium text-foreground">{formatCurrency(rendaMensalDesejada)}</span> por mês.
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">Dados de aposentadoria serão carregados quando disponíveis.</span>
+                )}
               </p>
             </div>
 

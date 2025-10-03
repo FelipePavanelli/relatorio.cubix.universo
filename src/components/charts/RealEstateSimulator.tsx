@@ -71,21 +71,25 @@ const CurrencyInput: React.FC<{
   );
 };
 
-const RealEstateSimulator: React.FC = () => {
+interface RealEstateSimulatorProps {
+  data?: any;
+}
+
+const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
   const [tipo, setTipo] = useState<'financiamento' | 'consorcio' | 'vista'>('financiamento');
-  const [valorImovel, setValorImovel] = useState(500000);
-  const [taxaRealAnual, setTaxaRealAnual] = useState(7); // 7% a.a. default
-  const [prazoFinanciamento] = useState(420); // meses
-  const [taxaAdm, setTaxaAdm] = useState(20); // 20% default consórcio
-  const [lanceEmbutido, setLanceEmbutido] = useState(10); // 10% default consórcio
-  const [taxaCETAnual, setTaxaCETAnual] = useState(0.07); // manter para compatibilidade
-  const [prazoConsorcio] = useState(220);
-  const [contemplacaoNaParcela] = useState(40);
-  const [entradaPercent, setEntradaPercent] = useState(20); // default 20%
+  const [valorImovel, setValorImovel] = useState(data?.imovelDesejado?.objetivo?.valorImovel || 0);
+  const [taxaRealAnual, setTaxaRealAnual] = useState(0);
+  const [prazoFinanciamento] = useState(0);
+  const [taxaAdm, setTaxaAdm] = useState(0);
+  const [lanceEmbutido, setLanceEmbutido] = useState(0);
+  const [taxaCETAnual, setTaxaCETAnual] = useState(0);
+  const [prazoConsorcio] = useState(0);
+  const [contemplacaoNaParcela] = useState(0);
+  const [entradaPercent, setEntradaPercent] = useState(0);
   
   // Parâmetros para análise real (descontada inflação)
-  const [rentabilidadeRealAnual, setRentabilidadeRealAnual] = useState(5); // 5% a.a. real default
-  const [prazoComparacao] = useState(420); // mesmo prazo do financiamento para comparação
+  const [rentabilidadeRealAnual, setRentabilidadeRealAnual] = useState(0);
+  const [prazoComparacao] = useState(0);
 
   // Resultados
   const [entrada, setEntrada] = useState(0);

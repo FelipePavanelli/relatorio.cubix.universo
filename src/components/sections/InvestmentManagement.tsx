@@ -105,6 +105,18 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
+  // Verificar se dados estão disponíveis
+  if (!data) {
+    return (
+      <section className="py-16 px-4" id="investment-management">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Gestão de Investimentos</h2>
+          <p className="text-muted-foreground">Aguarde o carregamento dos dados da API.</p>
+        </div>
+      </section>
+    );
+  }
+
   // Verificar se temos dados detalhados preenchidos
   const hasDetailedData = data.investimentosDetalhados && 
     (data.investimentosDetalhados.por_classe.renda_fixa !== null ||

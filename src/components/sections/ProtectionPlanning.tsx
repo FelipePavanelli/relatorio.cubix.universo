@@ -16,17 +16,45 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
   if (!protectionData) {
-    return <div>Dados de proteção patrimonial não disponíveis</div>;
+    return (
+      <div className="py-16 px-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Dados de Proteção Patrimonial</h2>
+          <p className="text-muted-foreground">Dados de proteção patrimonial não disponíveis. Aguarde o carregamento dos dados da API.</p>
+        </div>
+      </div>
+    );
   }
 
-  // Dados base para cálculos
-  const rendaAnualInformada = Number(protectionData?.analiseNecessidades?.rendaAnual) || 0;
-  const rendaMensalPorRendaAnual = rendaAnualInformada > 0 ? rendaAnualInformada / 12 : 0;
-  const rendaMensalPorRendas = Array.isArray(data?.financas?.rendas)
-    ? data.financas.rendas.reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0)
-    : 0;
-  const rendaMensal = rendaMensalPorRendaAnual || rendaMensalPorRendas || 0;
-  const rendaAnualBase = rendaAnualInformada || (rendaMensalPorRendas * 12);
+  // Verificar se data está disponível
+  if (!data) {
+    return (
+      <div className="py-16 px-4">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Dados Não Disponíveis</h2>
+          <p className="text-muted-foreground">Aguarde o carregamento dos dados da API.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Helpers: identificar renda do cônjuge para não somar nos totais
+  const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isSpouseIncome = (renda: any) => {
+    const label = normalize(renda?.descricao || renda?.origem || renda?.fonte || '');
+    return label.includes('conjuge') || label.includes('conjuge clt');
+  };
+
+  // Dados base para cálculos - APENAS renda do cliente principal (excluindo cônjuge)
+  // Filtrar rendas para excluir cônjuge
+  const rendasClientePrincipal = Array.isArray(data?.financas?.rendas)
+    ? data.financas.rendas.filter((r: any) => !isSpouseIncome(r))
+    : [];
+  const rendaMensalPorRendas = rendasClientePrincipal.reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
+  
+  // Usar apenas renda do cliente principal (ignorar dados mockados que podem incluir cônjuge)
+  const rendaMensal = rendaMensalPorRendas || 0;
+  const rendaAnualBase = rendaMensalPorRendas * 12;
 
   // Patrimônio total para Sucessão Patrimonial (custos de inventário/ITCMD)
   const patrimonioTotal =
@@ -42,31 +70,43 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
   const mesesPadraoVida = Math.min(Math.max(anosAteAposentadoria, 0) * 12, 200);
   const anosConsiderados = mesesPadraoVida / 12; // cap de 200 meses convertido em anos
   const capitalPadraoVidaFamilia = rendaAnualBase * anosConsiderados;
-  const capitalAssistenciaFuneral = 12000;
+  const capitalAssistenciaFuneral = 12000; // R$ 12.000 - valor fixo mockado
   const capitalInvalidezPermanente = rendaMensal * 1.25 * 60;
   const valorDiarioDIT = rendaMensal / 30; // Exibido como valor diário
   const capitalDoencasGraves = rendaMensal * 12;
-  const capitalCirurgia = 50000; // base ajustável
+  const capitalCirurgia = 50000; // R$ 50.000 - valor fixo mockado
 
   // Exibir/ocultar coluna "Apólice Atual"
   const showApoliceAtual = false;
 
   // Formação dos filhos: gasto educação mensal × 13 × anos restantes até 21 anos
   const gastoEducacaoMensal = Number(protectionData?.analiseNecessidades?.gastoEducacaoMensal) || 0;
-  const idadesDependentes: number[] = Array.isArray((protectionData?.analiseNecessidades as any)?.idadesDependentes)
-    ? ((protectionData?.analiseNecessidades as any)?.idadesDependentes as number[])
-    : (Array.isArray((data as any)?.cliente?.dependentes)
-      ? ((data as any).cliente.dependentes as any[]).map((d: any) => Number(d?.idade) || 0)
-      : []);
+  
+  // Extrair idades dos dependentes do JSON
+  const idadesDependentes: number[] = Array.isArray((data as any)?.cliente?.dependentes)
+    ? ((data as any).cliente.dependentes as any[]).map((d: any) => Number(d?.idade) || 0)
+    : [];
+  
+  // Calcular anos restantes até 21 anos para cada dependente
   let anosRestantesAte21 = 0;
   if (idadesDependentes.length > 0) {
-    anosRestantesAte21 = idadesDependentes.reduce((acc: number, idade: number) => acc + Math.max(0, 21 - (Number(idade) || 0)), 0);
+    anosRestantesAte21 = idadesDependentes.reduce((acc: number, idade: number) => {
+      const anosRestantes = Math.max(0, 21 - idade);
+      return acc + anosRestantes;
+    }, 0);
   } else {
+    // Fallback: usar dados da análise de necessidades se disponível
     const nDeps = Number(protectionData?.analiseNecessidades?.numeroDependentes) || 0;
     const anosSuporte = Number(protectionData?.analiseNecessidades?.anosSuporteDependentes) || 0;
     anosRestantesAte21 = nDeps * anosSuporte;
   }
-  const capitalFormacaoFilhos = gastoEducacaoMensal * 13 * anosRestantesAte21;
+  
+  // Se não há gasto de educação definido, usar um valor padrão baseado na renda do cliente principal
+  const gastoEducacaoMensalFinal = gastoEducacaoMensal > 0 
+    ? gastoEducacaoMensal 
+    : rendaMensal * 0.1; // 10% da renda mensal do cliente como estimativa para educação
+  
+  const capitalFormacaoFilhos = gastoEducacaoMensalFinal * 13 * anosRestantesAte21;
 
   return (
     <section className="py-16 px-4" id="protection">
@@ -105,7 +145,7 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
           <CardContent>
             <div className="grid md:grid-cols-3 gap-6">
               <div className="p-4 rounded-lg border bg-muted/20">
-                <div className="text-sm text-muted-foreground">Renda Anual (base)</div>
+                <div className="text-sm text-muted-foreground">Renda Anual (cliente principal)</div>
                 <div className="text-xl font-semibold mt-1">{formatCurrency(rendaAnualBase)}</div>
               </div>
               <div className="p-4 rounded-lg border bg-muted/20">
@@ -134,11 +174,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                 <span className="font-semibold">Como calculamos:</span>
                 <span> Custos com Inventário: patrimônio total × 12% (ITCMD + inventário).</span>
                 <span> Reestabelecimento de Padrão de Vida: renda mensal × 12 × anos até aposentadoria.</span>
-                <span> Assistência Funeral: valor fixo de R$ 12.000.</span>
+                <span> Assistência Funeral: valor definido nos dados.</span>
                 <span> Necessidades por Invalidez: renda mensal × 1,25 × 60.</span>
                 <span> Renda Diária por Incapacidade (DIT/DIH): renda mensal ÷ 30.</span>
                 <span> Doenças Graves: renda mensal × 12.</span>
-                <span> Cirurgia: valor base de R$ 50.000 (ajustável).</span>
+                <span> Cirurgia: valor definido nos dados.</span>
               </div>
             )}
           </CardContent>
@@ -182,15 +222,111 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
               </div>
               <div className="p-4 rounded-lg border bg-muted/20">
                 <div className="text-sm text-muted-foreground">Soluções existentes</div>
-                <div className="text-xl font-semibold mt-1">
-                  {Array.isArray(protectionData?.solucoesExistentes) && protectionData.solucoesExistentes.length > 0
-                    ? protectionData.solucoesExistentes.join(', ')
-                    : 'Nenhuma informada'}
+                <div className="mt-2">
+                  {Array.isArray(protectionData?.solucoesExistentes) && protectionData.solucoesExistentes.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {protectionData.solucoesExistentes.map((solucao: string, index: number) => (
+                        <span key={index} className="inline-block bg-accent/10 text-accent text-sm px-3 py-1 rounded-full">
+                          {solucao}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xl font-semibold text-muted-foreground">Nenhuma informada</span>
+                  )}
                 </div>
               </div>
             </div>
           </CardContent>
         </HideableCard>
+
+        {/* Seguros Existentes */}
+        {Array.isArray(protectionData?.segurosExistentes) && protectionData.segurosExistentes.length > 0 && (
+          <HideableCard
+            id="seguros-existentes"
+            isVisible={isCardVisible("seguros-existentes")}
+            onToggleVisibility={() => toggleCardVisibility("seguros-existentes")}
+            hideControls={hideControls}
+            className="mb-10"
+          >
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Umbrella className="h-8 w-8 text-accent" />
+                <div>
+                  <CardTitle>Seguros Existentes</CardTitle>
+                  <CardDescription>Proteções já contratadas pelo cliente</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6">
+                {protectionData.segurosExistentes.map((seguro: any, index: number) => (
+                  <div key={index} className="p-6 rounded-xl border-2 border-muted/30 bg-gradient-to-br from-background to-muted/10 hover:shadow-lg transition-all duration-300">
+                    {/* Header do Seguro */}
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                          <Umbrella className="w-5 h-5 text-accent" />
+                        </div>
+                        <div>
+                          <h4 className="text-xl font-bold text-foreground">{seguro.tipo}</h4>
+                          {seguro.seguradora && (
+                            <p className="text-sm text-muted-foreground">{seguro.seguradora}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-accent">{formatCurrency(seguro.cobertura_atual || 0)}</div>
+                        <div className="text-xs text-muted-foreground">Cobertura Atual</div>
+                      </div>
+                    </div>
+
+                    {/* Informações Principais */}
+                    <div className="grid md:grid-cols-3 gap-6 mb-6">
+                      {seguro.premio_anual && (
+                        <div className="p-4 rounded-lg bg-muted/20 border">
+                          <div className="text-sm text-muted-foreground mb-1">Prêmio Anual</div>
+                          <div className="text-lg font-semibold">{formatCurrency(seguro.premio_anual)}</div>
+                        </div>
+                      )}
+                      {seguro.validade && (
+                        <div className="p-4 rounded-lg bg-muted/20 border">
+                          <div className="text-sm text-muted-foreground mb-1">Validade</div>
+                          <div className="text-lg font-semibold">{seguro.validade}</div>
+                        </div>
+                      )}
+                      {Array.isArray(seguro.beneficiarios) && seguro.beneficiarios.length > 0 && (
+                        <div className="p-4 rounded-lg bg-muted/20 border">
+                          <div className="text-sm text-muted-foreground mb-2">Beneficiários</div>
+                          <div className="flex flex-wrap gap-1">
+                            {seguro.beneficiarios.map((beneficiario: string, i: number) => (
+                              <span key={i} className="inline-flex items-center px-2 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium">
+                                {beneficiario}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Observações */}
+                    {seguro.observacoes && (
+                      <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200">
+                        <div className="flex items-start gap-2">
+                          <FileText className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="text-sm font-medium text-blue-900 mb-1">Observações</div>
+                            <p className="text-sm text-blue-800 leading-relaxed">{seguro.observacoes}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </HideableCard>
+        )}
 
         {/* Tabela Visual de Riscos */}
         <HideableCard
@@ -223,7 +359,8 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                 <table className="min-w-full text-sm border-separate border-spacing-y-1">
                   <thead className="bg-muted">
                     <tr>
-                      <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
+                      <th className="px-2 py-2 text-left font-semibold">Risco</th>
+                      <th className="px-2 py-2 text-right font-semibold">Valores Utilizados</th>
                       {false && (
                         <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
                       )}
@@ -241,6 +378,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">patrimônio total × 12%</span>
                         </div>
                       </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(patrimonioTotal)} × 12%
+                        </div>
+                      </td>
                       {false && (
                         <td className="px-2 py-2 text-right">{formatCurrency(capitalCustosInventario)}</td>
                       )}
@@ -256,6 +398,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda anual × anos (limite 200 meses)</span>
                         </div>
                       </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(rendaAnualBase)} × {anosConsiderados.toFixed(1)} anos
+                        </div>
+                      </td>
                       {false && (
                         <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
                       )}
@@ -265,26 +412,38 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                       <td className="px-2 py-2 text-right">{formatCurrency(capitalPadraoVidaFamilia)}</td>
                     </tr>
                     
-                    <tr className="bg-white hover:bg-muted/50 rounded">
-                      <td className="px-2 py-2">
-                        <div className="flex flex-col leading-tight">
-                          <span>Despesas até a Formação dos Filhos</span>
-                          <span className="text-[11px] text-muted-foreground">educação mensal × 13 × anos até 21</span>
-                        </div>
-                      </td>
-                      {false && (
+                    {false && (
+                      <tr className="bg-white hover:bg-muted/50 rounded">
+                        <td className="px-2 py-2">
+                          <div className="flex flex-col leading-tight">
+                            <span>Despesas até a Formação dos Filhos</span>
+                            <span className="text-[11px] text-muted-foreground">educação mensal × 13 × anos até 21</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <div className="text-xs text-muted-foreground">
+                            {formatCurrency(gastoEducacaoMensalFinal)} × 13 × {anosRestantesAte21} anos
+                          </div>
+                        </td>
+                        {false && (
+                          <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
+                        )}
+                        {showApoliceAtual && (
+                          <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
+                        )}
                         <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
-                      )}
-                      {showApoliceAtual && (
-                        <td className="px-2 py-2 text-right">{formatCurrency(0)}</td>
-                      )}
-                      <td className="px-2 py-2 text-right">{formatCurrency(capitalFormacaoFilhos)}</td>
-                    </tr>
+                      </tr>
+                    )}
                     <tr className="bg-white hover:bg-muted/50 rounded">
                       <td className="px-2 py-2">
                         <div className="flex flex-col leading-tight">
                           <span>Morte Acidental</span>
                           <span className="text-[11px] text-muted-foreground">mesmo valor de padrão de vida</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          = Padrão de Vida
                         </div>
                       </td>
                       {false && (
@@ -299,7 +458,12 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                       <td className="px-2 py-2">
                         <div className="flex flex-col leading-tight">
                           <span>Assistência Funeral</span>
-                          <span className="text-[11px] text-muted-foreground">valor fixo de R$ 12.000</span>
+                          <span className="text-[11px] text-muted-foreground">valor definido nos dados</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          Valor fixo
                         </div>
                       </td>
                       {false && (
@@ -345,7 +509,8 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                 <table className="min-w-full text-sm border-separate border-spacing-y-1">
                   <thead className="bg-muted">
                     <tr>
-                      <th className="px-2 py-2 text-left font-semibold">&nbsp;</th>
+                      <th className="px-2 py-2 text-left font-semibold">Risco</th>
+                      <th className="px-2 py-2 text-right font-semibold">Valores Utilizados</th>
                       {false && (
                         <th className="px-2 py-2 text-right font-semibold">Capital Sugerido</th>
                       )}
@@ -363,6 +528,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda mensal × 1,25 × 60</span>
                         </div>
                       </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(rendaMensal)} × 1,25 × 60
+                        </div>
+                      </td>
                       {false && (
                         <td className="px-2 py-2 text-right">{formatCurrency(capitalInvalidezPermanente)}</td>
                       )}
@@ -376,6 +546,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                         <div className="flex flex-col leading-tight">
                           <span>Renda Diária por Incapacidade (DIT/DIH)</span>
                           <span className="text-[11px] text-muted-foreground">renda mensal ÷ 30</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(rendaMensal)} ÷ 30
                         </div>
                       </td>
                       {false && (
@@ -393,6 +568,11 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                           <span className="text-[11px] text-muted-foreground">renda mensal × 12</span>
                         </div>
                       </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatCurrency(rendaMensal)} × 12
+                        </div>
+                      </td>
                       {false && (
                         <td className="px-2 py-2 text-right">{formatCurrency(capitalDoencasGraves)}</td>
                       )}
@@ -405,7 +585,12 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
                       <td className="px-2 py-2">
                         <div className="flex flex-col leading-tight">
                           <span>Cirurgia</span>
-                          <span className="text-[11px] text-muted-foreground">valor base de R$ 50.000</span>
+                          <span className="text-[11px] text-muted-foreground">valor definido nos dados</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <div className="text-xs text-muted-foreground">
+                          Valor fixo
                         </div>
                       </td>
                       {false && (

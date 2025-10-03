@@ -13,37 +13,20 @@ import TaxPlanning from '@/components/sections/TaxPlanning';
 import ProtectionPlanning from '@/components/sections/ProtectionPlanning';
 import SuccessionPlanning from '@/components/sections/SuccessionPlanning';
 import ActionPlan from '@/components/sections/ActionPlan';
+import PlanningMap from '@/components/sections/PlanningMap';
 import FloatingActions from '@/components/layout/FloatingActions';
 import { DotNavigation, MobileDotNavigation } from '@/components/layout/DotNavigation';
 import { useSectionObserver } from '@/hooks/useSectionObserver';
-import { Loader2 } from 'lucide-react';
+import LoadingScreen from '@/components/ui/LoadingScreen';
+import ErrorScreen from '@/components/ui/ErrorScreen';
+import AIProcessingScreen from '@/components/ui/AIProcessingScreen';
+import DataLoadedNotification from '@/components/ui/DataLoadedNotification';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 import SectionVisibilityControls from '@/components/layout/SectionVisibilityControls';
 import HideableSection from '@/components/ui/HideableSection';
 import { MODEL_CLASS_ALLOCATION, normalizePerfil, getRiskForClass, getLiquidityForClass, aggregateModelClasses, aggregateCurrentInvestments } from '@/data/modelPortfolios';
-import localUserReports from '@/pages/UserReports.json';
 
-// Utilitário simples de deep-merge (preserva valores do destino e preenche com origem)
-const deepMerge = (target: any, source: any) => {
-  if (Array.isArray(target) && Array.isArray(source)) return target.length ? target : source;
-  if (target && typeof target === 'object' && source && typeof source === 'object') {
-    const result: any = { ...source, ...target };
-    for (const key of Object.keys(result)) {
-      if (key in target && key in source) {
-        const t = (target as any)[key];
-        const s = (source as any)[key];
-        if (t && s && typeof t === 'object' && typeof s === 'object') {
-          result[key] = deepMerge(t, s);
-        } else {
-          result[key] = t ?? s;
-        }
-      }
-    }
-    return result;
-  }
-  return target ?? source;
-};
 
 interface IndexPageProps {
   accessor?: boolean;
@@ -55,6 +38,10 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [userReports, setUserReports] = useState(null);
+  const [hasError, setHasError] = useState(false);
+  const [showAIProcessing, setShowAIProcessing] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
 
   const getClientData = () => {
     const rendasOrigem = (userReports as any)?.financas?.rendas || [];
@@ -161,6 +148,7 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
         dependenciaRenda: (userReports as any)?.protecao?.dependencia_renda ?? (userReports as any)?.protecao?.dependenciaRenda ?? null,
         impactoPerdaRenda: (userReports as any)?.protecao?.impacto_perda_renda || (userReports as any)?.protecao?.impactoPerdaRenda || "",
         solucoesExistentes: (userReports as any)?.protecao?.solucoes_existentes || (userReports as any)?.protecao?.solucoesExistentes || [],
+        segurosExistentes: (userReports as any)?.protecao?.seguros_existentes || (userReports as any)?.protecao?.segurosExistentes || [],
         desejaRevisao: (userReports as any)?.protecao?.deseja_revisao ?? (userReports as any)?.protecao?.desejaRevisao ?? null,
         patrimonioEmNomeProprio: Number((userReports as any)?.protecao?.patrimonio_em_nome_proprio ?? (userReports as any)?.protecao?.patrimonioEmNomeProprio) || 0,
         solucaoInventario: (userReports as any)?.protecao?.solucao_inventario || (userReports as any)?.protecao?.solucaoInventario || "",
@@ -269,16 +257,9 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
       protecao_familiar: 'Proteção familiar e patrimonial no caso de morte',
       manutencao_padrao_vida: 'Manutenção do padrão de vida: no caso de acidente, invalidez ou doença',
     };
-    const source = (userReports as any)?.prioridades ?? (localUserReports as any)?.prioridades;
+    const source = (userReports as any)?.prioridades;
     if (!source || typeof source !== 'object') {
-      return [
-        { item: 'Proteção familiar e patrimonial no caso de morte', score: 10 },
-        { item: 'Reserva para educação dos filhos', score: 9 },
-        { item: 'Manutenção do padrão de vida: no caso de acidente, invalidez ou doença', score: 9 },
-        { item: 'Aposentadoria', score: 8 },
-        { item: 'Reserva de emergência', score: 7 },
-        { item: 'Projetos e sonhos financeiros', score: 6 },
-      ];
+      return []; // Retornar array vazio em vez de dados mockados
     }
     return Object.entries(source)
       .map(([key, val]) => ({
@@ -286,6 +267,13 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
         score: Number(val) || 0,
       }))
       .sort((a, b) => b.score - a.score);
+  };
+
+  // Função simplificada - apenas mostra mensagem para recarregar
+  const handleNewReport = () => {
+    setShowAIProcessing(true);
+    setIsLoading(false);
+    setIsPolling(false);
   };
 
   useEffect(() => {
@@ -315,8 +303,15 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const sessionId = urlParams.get('sessionId');
+        const isNewReport = urlParams.get('new') === 'true';
 
         if (sessionId) {
+          // Se for um novo relatório, mostrar tela de processamento da IA
+          if (isNewReport) {
+            handleNewReport();
+            return;
+          }
+
           const apiUrl = import.meta.env.VITE_API_THE_WAY;
           const response = await axios.get(`${apiUrl}/client-reports/${sessionId}`);
 
@@ -325,34 +320,48 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
+        setHasError(true);
+        setIsLoading(false);
       }
     };
     fetchUserReportsData();
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // Só para o loading quando os dados da API estiverem carregados
+    if (userReports) {
       setIsLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+      setShowAIProcessing(false);
+      setIsPolling(false);
+    }
+  }, [userReports]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-accent" />
-      </div>
-    );
+  if (hasError) {
+    return <ErrorScreen />;
   }
 
-  // Usar dados do JSON local como padrão quando não houver dados da API
-  // Garantir que imovelDesejado exista, mesclando API com JSON local
-  const beachHouseData = deepMerge(userReports || {}, localUserReports as any);
+  if (showAIProcessing) {
+    return <AIProcessingScreen />;
+  }
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  // Usar apenas dados recebidos da API
+  const beachHouseData = userReports || {};
 
   return (
     <ThemeProvider>
       <CardVisibilityProvider>
         <SectionVisibilityProvider>
+          {showNotification && (
+            <DataLoadedNotification 
+              onClose={() => setShowNotification(false)}
+              autoHide={true}
+              autoHideDelay={5000}
+            />
+          )}
           <div className="relative h-screen overflow-hidden">
             <Header />
             <main className="h-[calc(100vh-64px)] overflow-y-auto">
@@ -367,6 +376,10 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
                   }}
                 />
               </div>
+              
+              <HideableSection sectionId="planning-map" hideControls={clientPropect}>
+                <PlanningMap />
+              </HideableSection>
               
               <HideableSection sectionId="summary" hideControls={clientPropect}>
                 <FinancialSummary data={getClientData().financas} hideControls={clientPropect} />
