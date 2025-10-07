@@ -261,8 +261,8 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
 
   // Obter as ações prioritárias dinâmicas
   const acoesPrioritarias = getAcoesPrioritarias();
-
-  const specialistUrl = 'https://outlook.office.com/bookwithme/user/431917f0f5654e55bb2fa25f5b91cc7c@altavistainvest.com.br?anonymous&ismsaljsauthenabled&ep=pcard';
+  const internationalBookingUrl = 'https://outlook.office.com/bookwithme/user/ab98a94f3c5c43399ae4897ef17248ab@altavistainvest.com.br?anonymous&ismsaljsauthenabled&ep=plink';
+  const corporateBookingUrl = 'https://outlook.office.com/bookwithme/user/9c75accc546843e98c7a8152dc746ea6@agenteinvest.com.br/meetingtype/iRKg3rlYo0CRY3Eu2VhXuA2?anonymous&ismsaljsauthenabled&ep=mlink';
 
   return (
     <section className="py-16 px-4" id="action-plan">
@@ -338,6 +338,18 @@ const ActionPlan: React.FC<ActionPlanProps> = ({ data, hideControls }) => {
                       <Button asChild size="sm" className="w-full">
                         <a href="https://outlook.office.com/bookwithme/user/a6966fc789e84b01a9ea117c59722594%40altavistawm.com.br?anonymous&ismsaljsauthenabled" target="_blank" rel="noopener noreferrer">
                           Agendar Diagnóstico
+                        </a>
+                      </Button>
+                    ) : fase.titulo === "Internacional" ? (
+                      <Button asChild size="sm" className="w-full">
+                        <a href={internationalBookingUrl} target="_blank" rel="noopener noreferrer">
+                          Agendar Internacional
+                        </a>
+                      </Button>
+                    ) : fase.titulo === "Corporate (Soluções PJ)" ? (
+                      <Button asChild size="sm" className="w-full">
+                        <a href={corporateBookingUrl} target="_blank" rel="noopener noreferrer">
+                          Agendar Corporate
                         </a>
                       </Button>
                     ) : (

@@ -60,3 +60,4 @@ const DataLoadedNotification: React.FC<DataLoadedNotificationProps> = ({
 };
 
 export default DataLoadedNotification;
+

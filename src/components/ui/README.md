@@ -105,3 +105,4 @@ Todos os componentes são totalmente personalizáveis através de props, permiti
 - Animações respeitam preferências de movimento
 - Contraste adequado para leitura
 - Suporte a leitores de tela
+
