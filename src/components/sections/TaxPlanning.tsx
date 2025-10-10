@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import HideableCard from '@/components/ui/HideableCard';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
+import { useSpouseInclusion } from '@/context/SpouseInclusionContext';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import StatusChip from '@/components/ui/StatusChip';
 import {
@@ -36,12 +37,13 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
   const comparativoRef = useScrollAnimation();
   const recomendacoesRef = useScrollAnimation();
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
+  const { includeSpouse, setIncludeSpouse } = useSpouseInclusion();
 
   // Diagnóstico Tributário - cálculos dinâmicos a partir das rendas
   const rendas = Array.isArray(data?.financas?.rendas) ? data.financas.rendas : [];
   const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isSpouseIncome = (r: any) => normalize(r?.descricao || r?.fonte || '').includes('conjuge');
-  const rendasAnalise = rendas.filter((r: any) => !isSpouseIncome(r));
+  const rendasAnalise = includeSpouse ? rendas : rendas.filter((r: any) => !isSpouseIncome(r));
   const isIsento = (txt?: string) => (txt || '').toLowerCase().includes('isento');
   const isAluguel = (txt?: string) => /alug|loca/i.test(txt || '');
   const isDividendo = (txt?: string) => /dividen/i.test(txt || '');
@@ -170,11 +172,12 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
                   <TableBody>
                     {rendas.map((r: any, idx: number) => {
                       const spouse = isSpouseIncome(r);
+                      const isExcluded = spouse && !includeSpouse;
                       return (
                         <TableRow key={idx}>
                           <TableCell className="font-medium">
                             {r?.descricao || r?.fonte || 'Renda'}
-                            {spouse && (
+                            {isExcluded && (
                               <span className="ml-2 text-xs text-muted-foreground italic">(não contabilizada)</span>
                             )}
                           </TableCell>
@@ -189,11 +192,15 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
                 </Table>
                 <div className="grid md:grid-cols-3 gap-4 mt-4">
                   <div className="flex flex-col">
-                    <span className="text-sm text-muted-foreground mb-1">Renda Tributável (mês)</span>
+                    <span className="text-sm text-muted-foreground mb-1">
+                      Renda Tributável (mês) {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+                    </span>
                     <span className="font-medium">{formatCurrency(rendaTributavelMensal)}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm text-muted-foreground mb-1">Renda Isenta (mês)</span>
+                    <span className="text-sm text-muted-foreground mb-1">
+                      Renda Isenta (mês) {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+                    </span>
                     <span className="font-medium">{formatCurrency(rendaIsentaMensal)}</span>
                   </div>
                   <div className="flex flex-col">
@@ -252,7 +259,9 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
             <CardContent className="space-y-6">
               <div className="grid md:grid-cols-4 gap-4">
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">Renda Tributável (ano)</div>
+                  <div className="text-sm text-muted-foreground mb-1">
+                    Renda Tributável (ano) {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+                  </div>
                   <div className="font-medium">{formatCurrency(rendaTributavelAnual)}</div>
                 </div>
                 <div>

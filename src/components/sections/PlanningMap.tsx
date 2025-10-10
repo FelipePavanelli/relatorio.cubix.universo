@@ -28,27 +28,38 @@ const PlanningMap: React.FC<PlanningMapProps> = ({ className }) => {
   const visibleSteps = steps.filter(s => isSectionVisible(s.id));
   
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className={cn('rounded-lg border border-border/50 bg-muted/5 p-4 md:p-6', className)}>
-        <h2 className="card-title-standard text-lg mb-3">Mapa do Planejamento</h2>
-        <p className="text-sm text-muted-foreground mb-6">Como conduziremos a apresentação do relatório:</p>
-        <ol className="relative grid md:grid-cols-3 gap-6">
-        {visibleSteps.map((s, idx) => (
-          <li key={s.id} className="flex items-start gap-3 rounded-md border border-border/40 bg-card/60 p-3 hover:bg-card/80 transition-colors">
-            <div className="mt-0.5 h-7 w-7 shrink-0 rounded-full bg-accent/10 text-accent flex items-center justify-center text-sm font-semibold">
-              {idx + 1}
-            </div>
-            <div className="min-w-0 flex-1">
-              <a href={`#${s.id}`} className="font-medium text-foreground hover:underline break-words block">
-                {s.title}
-              </a>
-              {s.description && (
-                <div className="text-xs text-muted-foreground mt-1 break-words">{s.description}</div>
-              )}
-            </div>
-          </li>
-        ))}
-        </ol>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={cn('rounded-xl border border-border/50 bg-gradient-to-br from-muted/5 to-muted/10 p-6 md:p-8 shadow-sm', className)}>
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Mapa do Planejamento</h2>
+          <p className="text-sm md:text-base text-muted-foreground">Como conduziremos a apresentação do relatório:</p>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {visibleSteps.map((s, idx) => (
+            <a 
+              key={s.id} 
+              href={`#${s.id}`}
+              className="group relative flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4 md:p-5 hover:border-accent/50 hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
+            >
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-accent/20 to-accent/10 text-accent flex items-center justify-center text-base font-bold border border-accent/20 group-hover:from-accent group-hover:to-accent/80 group-hover:text-white transition-all duration-200">
+                  {idx + 1}
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <h3 className="font-semibold text-foreground group-hover:text-accent transition-colors leading-snug">
+                    {s.title}
+                  </h3>
+                  {s.description && (
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                      {s.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { CircleDollarSign, Shield, Briefcase, Umbrella, Plane, FileText } from '
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import HideableCard from '@/components/ui/HideableCard';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
+import { useSpouseInclusion } from '@/context/SpouseInclusionContext';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { Separator } from '@/components/ui/separator';
 
@@ -14,6 +15,7 @@ interface ProtectionPlanningProps {
 const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideControls }) => {
   const protectionData = data?.protecao;
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
+  const { includeSpouse, setIncludeSpouse } = useSpouseInclusion();
 
   if (!protectionData) {
     return (
@@ -45,14 +47,15 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
     return label.includes('conjuge') || label.includes('conjuge clt');
   };
 
-  // Dados base para cálculos - APENAS renda do cliente principal (excluindo cônjuge)
-  // Filtrar rendas para excluir cônjuge
-  const rendasClientePrincipal = Array.isArray(data?.financas?.rendas)
-    ? data.financas.rendas.filter((r: any) => !isSpouseIncome(r))
-    : [];
-  const rendaMensalPorRendas = rendasClientePrincipal.reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
+  // Dados base para cálculos - Filtrar ou não cônjuge baseado no toggle
+  const todasRendas = Array.isArray(data?.financas?.rendas) ? data.financas.rendas : [];
+  const rendasFiltradas = includeSpouse 
+    ? todasRendas 
+    : todasRendas.filter((r: any) => !isSpouseIncome(r));
   
-  // Usar apenas renda do cliente principal (ignorar dados mockados que podem incluir cônjuge)
+  const rendaMensalPorRendas = rendasFiltradas.reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
+  
+  // Calcular renda mensal e anual
   const rendaMensal = rendaMensalPorRendas || 0;
   const rendaAnualBase = rendaMensalPorRendas * 12;
 
@@ -145,7 +148,9 @@ const ProtectionPlanning: React.FC<ProtectionPlanningProps> = ({ data, hideContr
           <CardContent>
             <div className="grid md:grid-cols-3 gap-6">
               <div className="p-4 rounded-lg border bg-muted/20">
-                <div className="text-sm text-muted-foreground">Renda Anual (cliente principal)</div>
+                <div className="text-sm text-muted-foreground">
+                  Renda Anual {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+                </div>
                 <div className="text-xl font-semibold mt-1">{formatCurrency(rendaAnualBase)}</div>
               </div>
               <div className="p-4 rounded-lg border bg-muted/20">

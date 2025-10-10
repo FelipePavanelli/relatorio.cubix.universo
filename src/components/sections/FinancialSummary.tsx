@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
+import { useSpouseInclusion } from '@/context/SpouseInclusionContext';
 import { Card } from '@/components/ui/card';
 import { ChartContainer } from '@/components/ui/chart';
 import { chartPalette } from '@/theme/chartPalette';
@@ -34,16 +35,20 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
   const balanceCardRef = useScrollAnimation();
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
+  const { includeSpouse, setIncludeSpouse } = useSpouseInclusion();
 
-  // Helpers: identify renda do cônjuge para não somar nos totais
+  // Helpers: identify renda do cônjuge
   const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const isSpouseIncome = (renda: { fonte?: string; descricao?: string }) => {
     const label = normalize(renda?.descricao || renda?.fonte || '');
     return label.includes('conjuge');
   };
 
-  // Calculate total income excluding spouse income
-  const incomesForTotals = (data.rendas || []).filter(r => !isSpouseIncome(r));
+  // Calculate total income - include or exclude spouse based on toggle
+  const todasRendas = data.rendas || [];
+  const incomesForTotals = includeSpouse 
+    ? todasRendas 
+    : todasRendas.filter(r => !isSpouseIncome(r));
   const totalIncome = incomesForTotals.reduce((sum, renda: any) => sum + (Number(renda?.valor) || 0), 0);
 
   // Valores derivados (mensal x anual)
@@ -95,7 +100,9 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
           <div className="grid md:grid-cols-12 gap-6">
             {/* Renda Mensal */}
             <Card className="p-6 text-center h-full col-span-12 md:col-span-6">
-              <h3 className="text-muted-foreground text-sm mb-1">Renda Mensal</h3>
+              <h3 className="text-muted-foreground text-sm mb-1">
+                Renda Mensal {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+              </h3>
               <div className="text-3xl font-bold mb-1">
                 {formatCurrency(totalIncome)}
               </div>
@@ -185,6 +192,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                     <div className="space-y-2">
                       {data.rendas.map((renda, index) => {
                         const spouse = isSpouseIncome(renda);
+                        const isExcluded = spouse && !includeSpouse;
                         return (
                           <div key={index} className="flex justify-between items-start">
                             <div className="text-sm">
@@ -196,7 +204,7 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                             <div className="flex items-center gap-6">
                               <div className="text-sm font-medium">{formatCurrency(renda.valor)} / mês</div>
                               <div className="text-sm font-medium text-muted-foreground">{formatCurrency((renda as any)?.valorAnual ?? (renda.valor * 12))} / ano</div>
-                              {spouse && (
+                              {isExcluded && (
                                 <div className="text-xs text-muted-foreground italic">(não contabilizada)</div>
                               )}
                             </div>

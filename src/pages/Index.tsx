@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { CardVisibilityProvider } from '@/context/CardVisibilityContext';
 import { SectionVisibilityProvider } from '@/context/SectionVisibilityContext';
+import { SpouseInclusionProvider } from '@/context/SpouseInclusionContext';
 import Header from '@/components/layout/Header';
 import CoverPage from '@/components/sections/CoverPage';
 import FinancialSummary from '@/components/sections/FinancialSummary';
@@ -130,7 +131,18 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
 
         taxaRetiradaSegura: 0.04,
         taxaInflacao: 0.03,
-        taxaJurosReal: 0.03
+        taxaJurosReal: 0.03,
+        
+        // Adicionar rendas e despesas para cálculo dinâmico do excedente
+        rendas: (userReports?.financas?.rendas || []).map((r: any) => ({
+          fonte: r.fonte,
+          descricao: r.descricao || r.origem,
+          origem: r.origem,
+          valor: r.valor,
+          tributacao: r.tributacao,
+          renda_passiva: (r as any)?.renda_passiva ?? (r as any)?.rendaPassiva ?? false
+        })),
+        despesasMensais: userReports?.financas?.resumo?.despesas_mensais || 0
       },
       objetivos: userReports?.objetivos || [],
       tributario: {
@@ -355,7 +367,8 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
     <ThemeProvider>
       <CardVisibilityProvider>
         <SectionVisibilityProvider>
-          {showNotification && (
+          <SpouseInclusionProvider>
+            {showNotification && (
             <DataLoadedNotification 
               onClose={() => setShowNotification(false)}
               autoHide={true}
@@ -427,6 +440,7 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
             <FloatingActions userReports={userReports} />
             {!clientPropect && <SectionVisibilityControls />}
           </div>
+          </SpouseInclusionProvider>
         </SectionVisibilityProvider>
       </CardVisibilityProvider>
     </ThemeProvider>

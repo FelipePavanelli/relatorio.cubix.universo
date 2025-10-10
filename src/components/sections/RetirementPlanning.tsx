@@ -8,6 +8,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 import RetirementProjectionChart from '@/components/charts/RetirementProjectionChart';
 import { useCardVisibility } from '@/context/CardVisibilityContext';
+import { useSpouseInclusion } from '@/context/SpouseInclusionContext';
 
 interface RetirementData {
   ativos: Array<{ tipo: string; valor: number }>;
@@ -30,7 +31,8 @@ interface RetirementData {
   taxaRetiradaSegura: number;
   taxaInflacao: number;
   taxaJurosReal: number;
-  rendas?: Array<{ fonte?: string; descricao?: string; valor: number; tributacao?: string; renda_passiva?: boolean }>;
+  rendas?: Array<{ fonte?: string; descricao?: string; origem?: string; valor: number; tributacao?: string; renda_passiva?: boolean }>;
+  despesasMensais?: number;
   objetivos?: Array<{ tipo?: string; valor?: number; prazo?: string | number; prioridade?: any; nao_aposentadoria?: boolean }>;
 }
 
@@ -46,6 +48,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
   const projecaoRef = useScrollAnimation();
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
+  const { includeSpouse, setIncludeSpouse } = useSpouseInclusion();
   const [projectionData, setProjectionData] = React.useState<{
     capitalNecessario: number;
     aporteMensal: number;
@@ -66,23 +69,43 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
     idadeAposentadoriaPretendida: data?.idadeAposentadoria || 65,
   });
 
+  // Calcular excedente baseado na inclusão ou não do cônjuge
+  const normalize = (s: string) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isSpouseIncome = (renda: any) => {
+    const label = normalize(renda?.descricao || renda?.origem || renda?.fonte || '');
+    return label.includes('conjuge');
+  };
+
+  const todasRendas = data?.rendas || [];
+  const rendasFiltradas = includeSpouse 
+    ? todasRendas 
+    : todasRendas.filter((r: any) => !isSpouseIncome(r));
+  
+  const rendaMensalCalculada = rendasFiltradas.reduce((sum, renda: any) => sum + (Number(renda?.valor) || 0), 0);
+  
+  // Calcular excedente mensal ajustado
+  const excedenteMensalAjustado = rendaMensalCalculada - (Number(data?.despesasMensais) || 0);
+  
+  // Usar excedente ajustado se tivermos dados de renda, caso contrário usar o valor original
+  const excedenteMensal = todasRendas.length > 0 ? excedenteMensalAjustado : (data?.excedenteMensal || 0);
+
   // Calculate percentage of income that should be invested (aligned with spreadsheet)
   const percentualInvestir = () => {
-    if (!data?.excedenteMensal || !projectionData.aporteMensal) return 0;
-    return Math.round((projectionData.aporteMensal / data.excedenteMensal) * 100);
+    if (!excedenteMensal || !projectionData.aporteMensal) return 0;
+    return Math.round((projectionData.aporteMensal / excedenteMensal) * 100);
   };
 
   // Calculate percentage increase needed
   const percentualAumento = () => {
-    if (!data?.excedenteMensal || !projectionData.aporteMensal) return 0;
-    if (projectionData.aporteMensal <= data.excedenteMensal) return 0;
-    return Math.round(((projectionData.aporteMensal - data.excedenteMensal) / data.excedenteMensal) * 100);
+    if (!excedenteMensal || !projectionData.aporteMensal) return 0;
+    if (projectionData.aporteMensal <= excedenteMensal) return 0;
+    return Math.round(((projectionData.aporteMensal - excedenteMensal) / excedenteMensal) * 100);
   };
 
   // Calculate if contribution needs to be increased
   const calcularAumentoAporte = () => {
-    if (!data?.excedenteMensal || !projectionData.aporteMensal) return 0;
-    return Math.max(0, projectionData.aporteMensal - data.excedenteMensal);
+    if (!excedenteMensal || !projectionData.aporteMensal) return 0;
+    return Math.max(0, projectionData.aporteMensal - excedenteMensal);
   };
 
   // Check if contribution needs to be increased
@@ -97,26 +120,26 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
 
   // Check if client fits the scenarios (aligned with spreadsheet)
   const adequaAosCenarios = () => {
-    return data?.aporteMensalRecomendado <= (data?.excedenteMensal || 0);
+    return data?.aporteMensalRecomendado <= (excedenteMensal || 0);
   };
 
   // Calculate missing percentage (aligned with spreadsheet)
   const calcularPorcentagemFaltante = () => {
-    if (!data?.aporteMensalRecomendado || !data.excedenteMensal) return 0;
-    if (data.aporteMensalRecomendado <= data.excedenteMensal) return 0;
+    if (!data?.aporteMensalRecomendado || !excedenteMensal) return 0;
+    if (data.aporteMensalRecomendado <= excedenteMensal) return 0;
 
-    const faltante = data.aporteMensalRecomendado - data.excedenteMensal;
-    return Math.round((faltante / data.excedenteMensal) * 100);
+    const faltante = data.aporteMensalRecomendado - excedenteMensal;
+    return Math.round((faltante / excedenteMensal) * 100);
   };
 
   // Calculate necessary income reduction (aligned with spreadsheet)
   const calcularReducaoRendaNecessaria = () => {
-    if (!data?.rendaMensalDesejada || !data.excedenteMensal || !data?.aporteMensalRecomendado) return 0;
+    if (!data?.rendaMensalDesejada || !excedenteMensal || !data?.aporteMensalRecomendado) return 0;
 
-    if (data.aporteMensalRecomendado <= data.excedenteMensal) return 0;
+    if (data.aporteMensalRecomendado <= excedenteMensal) return 0;
 
     const porcentagemReducao = Math.round(
-      (1 - (data.excedenteMensal / data.aporteMensalRecomendado)) * 100
+      (1 - (excedenteMensal / data.aporteMensalRecomendado)) * 100
     );
     return porcentagemReducao > 0 ? porcentagemReducao : 0;
   };
@@ -167,9 +190,11 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                   </div>
                 </div>
                 <div className="card-metric">
-                  <h3 className="card-metric-label">Excedente Mensal</h3>
+                  <h3 className="card-metric-label">
+                    Excedente Mensal {includeSpouse ? '(cliente + cônjuge)' : '(cliente principal)'}
+                  </h3>
                   <div className="card-metric-value">
-                    {formatCurrency(data?.excedenteMensal || 0)}
+                    {formatCurrency(excedenteMensal || 0)}
                   </div>
                 </div>
                 <div className="card-metric">
@@ -283,7 +308,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                 retirementAge={data?.idadeAposentadoria || 65}
                 lifeExpectancy={data?.expectativaVida || 100}
                 currentPortfolio={data?.totalInvestido || 0}
-                monthlyContribution={data?.excedenteMensal || 0}
+                monthlyContribution={excedenteMensal || 0}
                 rendaMensalDesejada={data?.rendaMensalDesejada || 0}
                 safeWithdrawalRate={data?.taxaRetiradaSegura || 0.03}
                 inflationRate={data?.taxaInflacao || 0.0345}
