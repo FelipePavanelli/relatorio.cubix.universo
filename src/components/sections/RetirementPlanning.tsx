@@ -39,9 +39,10 @@ interface RetirementData {
 interface RetirementPlanningProps {
   data: RetirementData;
   hideControls?: boolean;
+  isClientVersion?: boolean;
 }
 
-const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideControls }) => {
+const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideControls, isClientVersion }) => {
   const headerRef = useScrollAnimation();
   const currentSituationRef = useScrollAnimation();
   const objetivoRef = useScrollAnimation();
@@ -143,6 +144,10 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
     );
     return porcentagemReducao > 0 ? porcentagemReducao : 0;
   };
+
+  // Valores derivados apenas para exibição amigável
+  const realInterestRatePercent = ((data?.taxaJurosReal ?? 0.03) * 100).toFixed(1);
+  const lifeExpectancyYears = data?.expectativaVida ?? 100;
 
   return (
     <section className="min-h-screen py-16 px-4" id="retirement">
@@ -265,22 +270,34 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                 </div>
               </div>
 
-              <div className="bg-muted/10 border border-border/80 rounded-lg p-4">
-                <h4 className="font-medium mb-2">Premissas Utilizadas (alinhadas com a planilha)</h4>
-                <ul className="grid md:grid-cols-2 gap-2">
-                  <li className="flex items-start text-sm">
-                    <ArrowRight size={16} className="mt-1 mr-2 text-accent" />
-                    <span>Taxa de juros real de {(data?.taxaJurosReal || 0.03) * 100}% a.a. (acumulação e consumo)</span>
-                  </li>
-                  <li className="flex items-start text-sm">
-                    <ArrowRight size={16} className="mt-1 mr-2 text-accent" />
-                    <span>Expectativa de vida até {data?.expectativaVida || 100} anos</span>
-                  </li>
-                  <li className="flex items-start text-sm">
-                    <ArrowRight size={16} className="mt-1 mr-2 text-accent" />
-                    <span>Cálculo do capital necessário usando Valor Presente (PV) de saques mensais</span>
-                  </li>
-                </ul>
+              <div className="bg-muted/10 border border-border/80 rounded-lg p-5 md:p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText size={18} className="text-accent" />
+                  <h4 className="font-medium">Premissas Utilizadas</h4>
+                </div>
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div className="flex items-start gap-2 p-3 rounded-md border border-border/60 bg-muted/5">
+                    <CheckCircle size={16} className="mt-0.5 text-accent" />
+                    <span className="text-sm leading-snug">
+                      Taxa de juros real de {realInterestRatePercent}% a.a. — rendimento acima da inflação,
+                      aplicada tanto na fase de acumulação quanto de consumo do patrimônio.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 p-3 rounded-md border border-border/60 bg-muted/5">
+                    <CheckCircle size={16} className="mt-0.5 text-accent" />
+                    <span className="text-sm leading-snug">
+                      Expectativa de vida considerada: {lifeExpectancyYears} anos — parâmetro para estimar
+                      por quanto tempo o patrimônio precisa sustentar a renda.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 p-3 rounded-md border border-border/60 bg-muted/5">
+                    <CheckCircle size={16} className="mt-0.5 text-accent" />
+                    <span className="text-sm leading-snug">
+                      Capital necessário calculado pelo Valor Presente (PV) dos saques mensais —
+                      quanto é preciso ter hoje, em reais de hoje, para manter a renda planejada.
+                    </span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </HideableCard>
@@ -315,6 +332,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                 scenarios={data?.cenarios || []}
                 onProjectionChange={setProjectionData}
                 hideControls={hideControls}
+                isClientVersion={isClientVersion}
                 externalLiquidityEvents={(() => {
                   const idadeAtual = Number(data?.idadeAtual) || 0;
                   const aposentadoria = Number(data?.idadeAposentadoria) || 65;

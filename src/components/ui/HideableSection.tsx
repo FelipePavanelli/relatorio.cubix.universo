@@ -24,16 +24,12 @@ const HideableSection: React.FC<HideableSectionProps> = ({
     return null;
   }
 
-  // Se a seção não está visível, não renderiza nada (remodela o relatório como se a seção não existisse)
-  // Na impressão, sempre renderiza a seção visível ao consultor (mesmo sem controles),
-  // mas respeitando o estado de visibilidade salvo. Se estiver oculta, não renderiza.
-  if (!isVisible) {
-    return null;
-  }
+  // Para o assessor (hideControls === false), quando a seção estiver oculta
+  // mantemos o bloco no layout com um efeito de desfoque e uma tarja informativa.
 
   // Se a seção está visível, renderiza normalmente com botão de alternância (quando permitido)
   return (
-    <div id={sectionId} className={cn("min-h-screen relative print-section", className)}>
+    <div id={sectionId} className={cn("min-h-screen relative print-section", !isVisible && !hideControls && "section-collapsed", className)}>
       {!hideControls && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
           <button
@@ -56,7 +52,12 @@ const HideableSection: React.FC<HideableSectionProps> = ({
           </button>
         </div>
       )}
-      {children}
+      {(isVisible || hideControls) && (
+        <div className={cn("transition-all")}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 };

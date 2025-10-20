@@ -82,8 +82,10 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
   const [prazoFinanciamento] = useState(0);
   const [taxaAdm, setTaxaAdm] = useState(0);
   const [lanceEmbutido, setLanceEmbutido] = useState(0);
+  const [lancePercent, setLancePercent] = useState(40);
   const [taxaCETAnual, setTaxaCETAnual] = useState(0);
-  const [prazoConsorcio] = useState(0);
+  // Prazo do consórcio em MESES
+  const [prazoConsorcio] = useState(180);
   const [contemplacaoNaParcela] = useState(0);
   const [entradaPercent, setEntradaPercent] = useState(0);
   
@@ -159,12 +161,15 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
   // Cálculo do consórcio
   const calcularConsorcio = () => {
     const lanceEmbutidoDecimal = lanceEmbutido / 100;
+    const lanceDecimal = lancePercent / 100;
     const taxaAdmDecimal = taxaAdm / 100;
     const valor_lance_embutido = valorImovel * lanceEmbutidoDecimal;
-    const carta_liquida = valorImovel - valor_lance_embutido;
+    const valor_lance = valorImovel * lanceDecimal; // lance com recursos próprios (40%–70%)
+    // Carta líquida: valor do bem menos os lances (próprio + embutido)
+    const carta_liquida = Math.max(0, valorImovel - valor_lance - valor_lance_embutido);
     const taxa_total = valorImovel * taxaAdmDecimal;
     const parcela_taxa_adm = taxa_total / prazoConsorcio;
-    const parcela_cota = valorImovel / prazoConsorcio;
+    const parcela_cota = carta_liquida / prazoConsorcio;
     const parcela_total_mensal = parcela_cota + parcela_taxa_adm;
     let parcelas: any[] = [];
     let total_pago = 0;
@@ -177,7 +182,8 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
       total_pago += parcela_total_mensal;
     }
     setParcelaConsorcio(parcela_total_mensal);
-    setTotalPagoConsorcio(total_pago);
+    // Total pago deve compor parcelas + lance próprio + lance embutido
+    setTotalPagoConsorcio(total_pago + valor_lance + valor_lance_embutido);
     setCustoTotalConsorcio(total_pago);
     setParcelasConsorcio(parcelas);
   };
@@ -277,47 +283,51 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
       };
 
   return (
-    <Card className="w-full h-full border-border/80 shadow-sm mt-16 mb-16">
-      <CardHeader className="px-6 pb-0">
+    <Card className="w-full h-full border-border/80 shadow-sm mt-8 md:mt-16 mb-8 md:mb-16">
+      <CardHeader className="px-4 md:px-6 pb-0">
         <div className="flex flex-col w-full gap-6">
           {/* Header Section */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between w-full">
-            <div>
-              <CardTitle className="text-2xl font-bold text-foreground mb-2">
+          <div className="flex flex-col space-y-4 w-full">
+            <div className="text-center md:text-left">
+              <CardTitle className="text-xl md:text-2xl font-bold text-foreground mb-2">
                 Simulador de Aquisição Imobiliária
               </CardTitle>
-              <CardDescription className="text-base text-muted-foreground">
+              <CardDescription className="text-sm md:text-base text-muted-foreground">
                 Compare custos reais de financiamento e consórcio vs. oportunidade perdida da compra à vista
               </CardDescription>
             </div>
-            <ToggleGroup
-              type="single"
-              value={tipo}
-              onValueChange={v => v && setTipo(v as 'financiamento' | 'consorcio' | 'vista')}
-              className="bg-muted/30 p-1 rounded-lg"
-            >
-              <ToggleGroupItem 
-                value="financiamento" 
-                size="sm" 
-                className="text-sm font-medium px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            <div className="flex justify-center md:justify-start">
+              <ToggleGroup
+                type="single"
+                value={tipo}
+                onValueChange={v => v && setTipo(v as 'financiamento' | 'consorcio' | 'vista')}
+                className="bg-muted/30 p-1 rounded-lg w-full max-w-md md:w-auto"
               >
-                Financiamento
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="consorcio" 
-                size="sm" 
-                className="text-sm font-medium px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
-              >
-                Consórcio
-              </ToggleGroupItem>
-              <ToggleGroupItem 
-                value="vista" 
-                size="sm" 
-                className="text-sm font-medium px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
-              >
-                Compra à Vista
-              </ToggleGroupItem>
-            </ToggleGroup>
+                <ToggleGroupItem 
+                  value="financiamento" 
+                  size="sm" 
+                  className="text-xs md:text-sm font-medium px-2 md:px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground flex-1 md:flex-none"
+                >
+                  <span className="hidden sm:inline">Financiamento</span>
+                  <span className="sm:hidden">Financ.</span>
+                </ToggleGroupItem>
+                <ToggleGroupItem 
+                  value="consorcio" 
+                  size="sm" 
+                  className="text-xs md:text-sm font-medium px-2 md:px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground flex-1 md:flex-none"
+                >
+                  Consórcio
+                </ToggleGroupItem>
+                <ToggleGroupItem 
+                  value="vista" 
+                  size="sm" 
+                  className="text-xs md:text-sm font-medium px-2 md:px-4 py-2 rounded bg-transparent hover:bg-muted/50 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground flex-1 md:flex-none"
+                >
+                  <span className="hidden sm:inline">Compra à Vista</span>
+                  <span className="sm:hidden">À Vista</span>
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
 
           {/* Parameters Section */}
@@ -325,24 +335,24 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
             <h3 className="text-lg font-semibold text-foreground">Parâmetros de Simulação</h3>
             
             {/* Explicação das Modalidades */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-              <h4 className="font-semibold text-gray-900 mb-3">Entendendo cada modalidade:</h4>
-              <div className="grid md:grid-cols-3 gap-4 text-sm text-gray-700">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 md:p-4 mb-4">
+              <h4 className="font-semibold text-gray-900 mb-3 text-sm md:text-base">Entendendo cada modalidade:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 text-xs md:text-sm text-gray-700">
                 <div>
-                  <h5 className="font-medium text-blue-700 mb-1">🏦 Financiamento</h5>
-                  <p>Você paga uma entrada e financia o restante. O custo real é a diferença entre o total pago (parcelas + entrada) e o valor do imóvel.</p>
+                  <h5 className="font-medium text-blue-700 mb-1 text-sm">🏦 Financiamento</h5>
+                  <p className="leading-relaxed">Você paga uma entrada e financia o restante. O custo real é a diferença entre o total pago (parcelas + entrada) e o valor do imóvel.</p>
                 </div>
                 <div>
-                  <h5 className="font-medium text-green-700 mb-1">🤝 Consórcio</h5>
-                  <p>Você paga parcelas mensais até ser contemplado. O custo real é a diferença entre o total pago e o valor do imóvel (inclui taxas de administração).</p>
+                  <h5 className="font-medium text-green-700 mb-1 text-sm">🤝 Consórcio</h5>
+                  <p className="leading-relaxed">Você paga parcelas mensais até ser contemplado. O custo real é a diferença entre o total pago e o valor do imóvel (inclui taxas de administração).</p>
                 </div>
                 <div>
-                  <h5 className="font-medium text-orange-700 mb-1">💰 Compra à Vista</h5>
-                  <p>Você paga o valor total do imóvel. A "perda" é a oportunidade de investir esse dinheiro e obter rendimentos ao longo do tempo.</p>
+                  <h5 className="font-medium text-orange-700 mb-1 text-sm">💰 Compra à Vista</h5>
+                  <p className="leading-relaxed">Você paga o valor total do imóvel. A "perda" é a oportunidade de investir esse dinheiro e obter rendimentos ao longo do tempo.</p>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 items-end">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="valorImovel" className="text-sm font-medium text-foreground">
                   Valor do Bem
@@ -352,7 +362,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
               {tipo === 'financiamento' && (
                 <>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="entradaSlider" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="entradaSlider" className="text-xs md:text-sm font-medium text-foreground">
                       Entrada (%)
                     </Label>
                     <div className="flex flex-col gap-2">
@@ -365,14 +375,14 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                         onValueChange={v => setEntradaPercent(v[0])} 
                         className="w-full" 
                       />
-                      <div className="flex justify-between w-full text-sm text-muted-foreground">
+                      <div className="flex justify-between w-full text-xs md:text-sm text-muted-foreground">
                         <span className="font-medium">{entradaPercent}%</span>
-                        <span className="font-medium">{formatarMoedaBRL(valorImovel * (entradaPercent / 100))}</span>
+                        <span className="font-medium text-right">{formatarMoedaBRL(valorImovel * (entradaPercent / 100))}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="taxaRealSlider" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="taxaRealSlider" className="text-xs md:text-sm font-medium text-foreground">
                       Taxa Real de Financiamento (%)
                     </Label>
                     <div className="flex flex-col gap-2">
@@ -385,7 +395,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                         onValueChange={v => setTaxaRealAnual(Number(v[0].toFixed(1)))} 
                         className="w-full" 
                       />
-                      <div className="flex justify-end w-full text-sm text-muted-foreground">
+                      <div className="flex justify-end w-full text-xs md:text-sm text-muted-foreground">
                         <span className="font-medium">{taxaRealAnual.toFixed(1)}%</span>
                       </div>
                     </div>
@@ -396,7 +406,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
               {tipo === 'consorcio' && (
                 <>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="taxaAdm" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="taxaAdm" className="text-xs md:text-sm font-medium text-foreground">
                       Taxa de Administração (%)
                     </Label>
                     <div className="flex flex-col gap-2">
@@ -409,13 +419,33 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                         onValueChange={v => setTaxaAdm(Number(v[0].toFixed(1)))} 
                         className="w-full" 
                       />
-                      <div className="flex justify-end w-full text-sm text-muted-foreground">
+                      <div className="flex justify-end w-full text-xs md:text-sm text-muted-foreground">
                         <span className="font-medium">{taxaAdm.toFixed(1)}%</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="lanceEmbutido" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="lancePercent" className="text-xs md:text-sm font-medium text-foreground">
+                      Lance (% do Bem)
+                    </Label>
+                    <div className="flex flex-col gap-2">
+                      <Slider 
+                        id="lancePercentSlider" 
+                        min={40} 
+                        max={70} 
+                        step={1} 
+                        value={[lancePercent]} 
+                        onValueChange={v => setLancePercent(v[0])} 
+                        className="w-full" 
+                      />
+                      <div className="flex justify-between w-full text-xs md:text-sm text-muted-foreground">
+                        <span className="font-medium">{lancePercent}%</span>
+                        <span className="font-medium text-right">{formatarMoedaBRL(valorImovel * (lancePercent / 100))}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="lanceEmbutido" className="text-xs md:text-sm font-medium text-foreground">
                       % de Lance Embutido
                     </Label>
                     <div className="flex flex-col gap-2">
@@ -428,7 +458,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                         onValueChange={v => setLanceEmbutido(Number(v[0].toFixed(1)))} 
                         className="w-full" 
                       />
-                      <div className="flex justify-end w-full text-sm text-muted-foreground">
+                      <div className="flex justify-end w-full text-xs md:text-sm text-muted-foreground">
                         <span className="font-medium">{lanceEmbutido.toFixed(1)}%</span>
                       </div>
                     </div>
@@ -440,7 +470,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
               {tipo === 'vista' && (
                 <>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="rentabilidadeSlider" className="text-sm font-medium text-foreground">
+                    <Label htmlFor="rentabilidadeSlider" className="text-xs md:text-sm font-medium text-foreground">
                       Rentabilidade Real Anual (%)
                     </Label>
                     <div className="flex flex-col gap-2">
@@ -453,7 +483,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                         onValueChange={v => setRentabilidadeRealAnual(Number(v[0].toFixed(1)))} 
                         className="w-full" 
                       />
-                      <div className="flex justify-end w-full text-sm text-muted-foreground">
+                      <div className="flex justify-end w-full text-xs md:text-sm text-muted-foreground">
                         <span className="font-medium">{rentabilidadeRealAnual.toFixed(1)}%</span>
                       </div>
                     </div>
@@ -471,20 +501,20 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
             <h3 className="text-lg font-semibold text-foreground">Resultados da Simulação</h3>
             
             {/* Explicação do Racional */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <h4 className="font-semibold text-blue-900 mb-2">Como interpretar os resultados:</h4>
-              <div className="space-y-2 text-sm text-blue-800">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-4">
+              <h4 className="font-semibold text-blue-900 mb-2 text-sm md:text-base">Como interpretar os resultados:</h4>
+              <div className="space-y-2 text-xs md:text-sm text-blue-800">
                 <p><strong>Financiamento:</strong> Mostra o custo real total que você pagará a mais pelo imóvel (juros + entrada - valor do imóvel).</p>
                 <p><strong>Consórcio:</strong> Mostra o custo real total das parcelas menos o valor do imóvel (inclui taxas de administração).</p>
                 <p><strong>Compra à Vista:</strong> Mostra quanto você "deixaria de ganhar" se investisse o dinheiro ao invés de comprar o imóvel à vista.</p>
                 <p className="font-medium">A opção com menor valor é a mais vantajosa financeiramente!</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {/* Parcela Mensal / Valor Investido */}
-              <div className="flex flex-col items-center justify-center p-6 bg-white border border-border rounded-xl shadow-sm min-h-[120px]">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-base font-semibold text-muted-foreground">
+              <div className="flex flex-col items-center justify-center p-4 md:p-6 bg-white border border-border rounded-xl shadow-sm min-h-[100px] md:min-h-[120px]">
+                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 mb-2">
+                  <span className="text-sm md:text-base font-semibold text-muted-foreground text-center">
                     {tipo === 'vista' ? 'Valor Investido' : 'Parcela Mensal'}
                   </span>
                   {tipo === 'financiamento' && (
@@ -497,7 +527,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                     <Badge variant="secondary" className="text-xs font-medium">À Vista</Badge>
                   )}
                 </div>
-                <span className="text-3xl font-extrabold text-primary tracking-tight">
+                <span className="text-xl md:text-3xl font-extrabold text-primary tracking-tight text-center">
                   {tipo === 'vista' 
                     ? formatarMoedaBRL(valorImovel)
                     : formatarMoedaBRL(tipo === 'financiamento' ? parcelaFinanciamento : parcelaConsorcio)
@@ -505,20 +535,20 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                 </span>
               </div>
               {/* Custo Total */}
-              <div className="flex flex-col items-center justify-center p-6 bg-white border border-border rounded-xl shadow-sm min-h-[120px]">
-                <span className="text-base font-semibold text-muted-foreground mb-2">
+              <div className="flex flex-col items-center justify-center p-4 md:p-6 bg-white border border-border rounded-xl shadow-sm min-h-[100px] md:min-h-[120px]">
+                <span className="text-sm md:text-base font-semibold text-muted-foreground mb-2 text-center">
                   {tipo === 'vista' ? 'Oportunidade Perdida' : 'Custo Total'}
                 </span>
-                <span className="text-3xl font-extrabold text-primary tracking-tight">
+                <span className="text-xl md:text-3xl font-extrabold text-primary tracking-tight text-center">
                   {formatarMoedaBRL(custoTotalEfetivo)}
                 </span>
               </div>
               {/* Total Pago / Valor Futuro */}
-              <div className="flex flex-col items-center justify-center p-6 bg-white border border-border rounded-xl shadow-sm min-h-[120px]">
-                <span className="text-base font-semibold text-muted-foreground mb-2">
+              <div className="flex flex-col items-center justify-center p-4 md:p-6 bg-white border border-border rounded-xl shadow-sm min-h-[100px] md:min-h-[120px]">
+                <span className="text-sm md:text-base font-semibold text-muted-foreground mb-2 text-center">
                   {tipo === 'vista' ? 'Valor Futuro' : 'Total Pago'}
                 </span>
-                <span className="text-3xl font-extrabold text-primary tracking-tight">
+                <span className="text-xl md:text-3xl font-extrabold text-primary tracking-tight text-center">
                   {tipo === 'vista' 
                     ? formatarMoedaBRL(valorFuturoInvestimento)
                     : formatarMoedaBRL(tipo === 'financiamento' ? totalPagoFinanciamento + entrada : totalPagoConsorcio)
@@ -527,7 +557,7 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
               </div>
             </div>
             {/* Additional Details */}
-            <div className="flex flex-col md:flex-row md:justify-between w-full gap-4 text-sm text-muted-foreground p-4 bg-muted/10 rounded-lg">
+            <div className="flex flex-col md:flex-row md:justify-between w-full gap-4 text-xs md:text-sm text-muted-foreground p-3 md:p-4 bg-muted/10 rounded-lg">
               {tipo === 'financiamento' && (
                 <>
                   <div className="flex flex-col gap-1">
@@ -545,7 +575,8 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                 <>
                   <div className="flex flex-col gap-1">
                     <span className="font-medium">Lance Embutido: <span className="text-foreground">{formatarMoedaBRL(valorImovel * (lanceEmbutido / 100))}</span></span>
-                    <span className="font-medium">Carta Líquida: <span className="text-foreground">{formatarMoedaBRL(valorImovel - valorImovel * (lanceEmbutido / 100))}</span></span>
+                    <span className="font-medium">Lance: <span className="text-foreground">{formatarMoedaBRL(valorImovel * (lancePercent / 100))}</span></span>
+                    <span className="font-medium">Carta Líquida: <span className="text-foreground">{formatarMoedaBRL(Math.max(0, valorImovel - valorImovel * (lanceEmbutido / 100) - valorImovel * (lancePercent / 100)))}</span></span>
                   </div>
                 </>
               )}
@@ -568,57 +599,135 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
             <div className="space-y-4 mt-8">
               <h3 className="text-lg font-semibold text-foreground">Comparativo Completo</h3>
               <div className="bg-white border border-border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-4 bg-muted/50 border-b border-border">
+                <div className="hidden md:grid grid-cols-4 bg-muted/50 border-b border-border">
                   <div className="p-4 font-semibold text-sm">Modalidade</div>
                   <div className="p-4 font-semibold text-sm text-center">Custo Real</div>
                   <div className="p-4 font-semibold text-sm text-center">Parcela/Investimento</div>
                   <div className="p-4 font-semibold text-sm text-center">Prazo</div>
                 </div>
                 
-                {/* Financiamento */}
-                <div className={`grid grid-cols-4 border-b border-border ${custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
-                  <div className="p-4 flex items-center">
-                    <span className="font-medium">Financiamento</span>
-                    {custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
-                      <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
-                    )}
+                {/* Desktop Table */}
+                <div className="hidden md:block">
+                  {/* Financiamento */}
+                  <div className={`grid grid-cols-4 border-b border-border ${custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+                    <div className="p-4 flex items-center">
+                      <span className="font-medium">Financiamento</span>
+                      {custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoTotalEfetivo)}</div>
+                    <div className="p-4 text-center">{formatarMoedaBRL(parcelaFinanciamento)}</div>
+                    <div className="p-4 text-center">{prazoFinanciamento / 12} anos</div>
                   </div>
-                  <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoTotalEfetivo)}</div>
-                  <div className="p-4 text-center">{formatarMoedaBRL(parcelaFinanciamento)}</div>
-                  <div className="p-4 text-center">{prazoFinanciamento / 12} anos</div>
+                  
+                  {/* Consórcio */}
+                  <div className={`grid grid-cols-4 border-b border-border ${custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+                    <div className="p-4 flex items-center">
+                      <span className="font-medium">Consórcio</span>
+                      {custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoConsorcio)}</div>
+                    <div className="p-4 text-center">{formatarMoedaBRL(parcelaConsorcio)}</div>
+                    <div className="p-4 text-center">{prazoConsorcio} meses</div>
+                  </div>
+                  
+                  {/* Compra à Vista */}
+                  <div className={`grid grid-cols-4 ${custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+                    <div className="p-4 flex items-center">
+                      <span className="font-medium">Compra à Vista</span>
+                      {custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoOportunidade)}</div>
+                    <div className="p-4 text-center">{formatarMoedaBRL(valorImovel)}</div>
+                    <div className="p-4 text-center">Imediato</div>
+                  </div>
                 </div>
-                
-                {/* Consórcio */}
-                <div className={`grid grid-cols-4 border-b border-border ${custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
-                  <div className="p-4 flex items-center">
-                    <span className="font-medium">Consórcio</span>
-                    {custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
-                      <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
-                    )}
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-3 p-4">
+                  {/* Financiamento Mobile */}
+                  <div className={`p-4 rounded-lg border ${custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white border-border'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">Financiamento</span>
+                      {custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Custo Real:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(custoTotalEfetivo)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Parcela:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(parcelaFinanciamento)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prazo:</span>
+                        <div className="font-semibold">{prazoFinanciamento / 12} anos</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoConsorcio)}</div>
-                  <div className="p-4 text-center">{formatarMoedaBRL(parcelaConsorcio)}</div>
-                  <div className="p-4 text-center">{prazoConsorcio / 12} anos</div>
-                </div>
-                
-                {/* Compra à Vista */}
-                <div className={`grid grid-cols-4 ${custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
-                  <div className="p-4 flex items-center">
-                    <span className="font-medium">Compra à Vista</span>
-                    {custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
-                      <Badge variant="secondary" className="ml-2 text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
-                    )}
+
+                  {/* Consórcio Mobile */}
+                  <div className={`p-4 rounded-lg border ${custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white border-border'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">Consórcio</span>
+                      {custoConsorcio === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Custo Real:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(custoConsorcio)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Parcela:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(parcelaConsorcio)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prazo:</span>
+                        <div className="font-semibold">{prazoConsorcio} meses</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 text-center font-semibold">{formatarMoedaBRL(custoOportunidade)}</div>
-                  <div className="p-4 text-center">{formatarMoedaBRL(valorImovel)}</div>
-                  <div className="p-4 text-center">Imediato</div>
+
+                  {/* Compra à Vista Mobile */}
+                  <div className={`p-4 rounded-lg border ${custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) ? 'bg-green-50 border-green-200' : 'bg-white border-border'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">Compra à Vista</span>
+                      {custoOportunidade === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">Melhor Opção</Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Custo Real:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(custoOportunidade)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Investimento:</span>
+                        <div className="font-semibold">{formatarMoedaBRL(valorImovel)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prazo:</span>
+                        <div className="font-semibold">Imediato</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               
               {/* Recomendação */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <h4 className="font-semibold text-green-900 mb-2">Recomendação:</h4>
-                <p className="text-sm text-green-800">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 md:p-4">
+                <h4 className="font-semibold text-green-900 mb-2 text-sm md:text-base">Recomendação:</h4>
+                <p className="text-xs md:text-sm text-green-800 leading-relaxed">
                   {custoTotalEfetivo === Math.min(custoTotalEfetivo, custoConsorcio, custoOportunidade) && 
                     "O financiamento apresenta o menor custo real total. Recomendamos esta opção para maximizar seu patrimônio."
                   }
@@ -634,34 +743,38 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-6">
+      <CardContent className="px-4 md:px-6">
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-foreground">
             {tipo === 'vista' ? 'Evolução do Investimento' : 'Evolução Temporal'}
           </h3>
-          <div className="w-full h-[420px]">
+          <div className="w-full h-[300px] md:h-[420px]">
             <Line data={chartData} options={{
               responsive: true,
+              maintainAspectRatio: false,
               plugins: {
                 legend: { 
                   display: true,
+                  position: 'top',
                   labels: {
                     font: {
-                      size: 12,
-                      weight: '500'
-                    }
+                      size: window.innerWidth < 768 ? 10 : 12,
+                      weight: 500
+                    },
+                    boxWidth: window.innerWidth < 768 ? 12 : 15,
+                    padding: window.innerWidth < 768 ? 8 : 12
                   }
                 },
                 tooltip: { 
                   mode: 'index', 
                   intersect: false,
                   titleFont: {
-                    size: 14,
-                    weight: '600'
+                    size: window.innerWidth < 768 ? 12 : 14,
+                    weight: 600
                   },
                   bodyFont: {
-                    size: 12,
-                    weight: '500'
+                    size: window.innerWidth < 768 ? 10 : 12,
+                    weight: 500
                   }
                 },
               },
@@ -671,15 +784,16 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                     display: true, 
                     text: tipo === 'vista' ? 'Mês' : tipo === 'financiamento' ? 'Parcela (mês)' : 'Mês',
                     font: {
-                      size: 12,
-                      weight: '600'
+                      size: window.innerWidth < 768 ? 10 : 12,
+                      weight: 600
                     }
                   },
                   ticks: {
                     font: {
-                      size: 11,
-                      weight: '500'
-                    }
+                      size: window.innerWidth < 768 ? 9 : 11,
+                      weight: 500
+                    },
+                    maxTicksLimit: window.innerWidth < 768 ? 6 : 10
                   }
                 },
                 y: { 
@@ -687,16 +801,17 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                     display: true, 
                     text: tipo === 'vista' ? 'Valor do Investimento (R$)' : 'Valor da Parcela (R$)',
                     font: {
-                      size: 12,
-                      weight: '600'
+                      size: window.innerWidth < 768 ? 10 : 12,
+                      weight: 600
                     }
                   },
                   position: 'left',
                   ticks: {
                     font: {
-                      size: 11,
-                      weight: '500'
-                    }
+                      size: window.innerWidth < 768 ? 9 : 11,
+                      weight: 500
+                    },
+                    maxTicksLimit: window.innerWidth < 768 ? 5 : 8
                   }
                 },
                 y1: {
@@ -704,8 +819,8 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                     display: true, 
                     text: 'Saldo Devedor (R$)',
                     font: {
-                      size: 12,
-                      weight: '600'
+                      size: window.innerWidth < 768 ? 10 : 12,
+                      weight: 600
                     }
                   },
                   position: 'right',
@@ -714,9 +829,10 @@ const RealEstateSimulator: React.FC<RealEstateSimulatorProps> = ({ data }) => {
                   },
                   ticks: {
                     font: {
-                      size: 11,
-                      weight: '500'
-                    }
+                      size: window.innerWidth < 768 ? 9 : 11,
+                      weight: 500
+                    },
+                    maxTicksLimit: window.innerWidth < 768 ? 5 : 8
                   }
                 },
               },

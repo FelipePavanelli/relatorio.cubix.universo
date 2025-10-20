@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
   ReferenceLine,
@@ -21,6 +21,8 @@ import { chartPalette } from '@/theme/chartPalette';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { getLiquidityEvents, saveLiquidityEvents, LiquidityEventApi } from '@/services/liquidityEventsService';
@@ -94,6 +96,7 @@ interface RetirementProjectionChartProps {
     idadeAposentadoria: number;
   }) => void;
   hideControls?: boolean;
+  isClientVersion?: boolean;
   externalLiquidityEvents?: Array<{
     id?: string;
     name: string;
@@ -382,27 +385,17 @@ const calculatePermittedIncomeAndDepletionAge = (
           : saqueMensal * ((fatorAnualConsumo - 1) / taxaMensalConsumo);
 
         const rendimentoCapital = capital * (fatorAnualConsumo - 1);
-        let saqueEfetivo = fvSaques; // valor futuro dos 12 saques mensais
-        let capitalFinal = capital + rendimentoCapital - saqueEfetivo;
+        const capitalFinal = capital + rendimentoCapital - fvSaques;
 
-        // Se o capital ficaria negativo, limitamos o saque do último ano para zerar
-        if (capitalFinal < 0) {
-          if (idade < consumoEndAge) {
-            const saldoMinimoParaUltimoAno = 1;
-            const maxSaque = Math.max(0, (capital + rendimentoCapital) - saldoMinimoParaUltimoAno);
-            saqueEfetivo = Math.min(saqueEfetivo, maxSaque);
-            capitalFinal = Math.max(saldoMinimoParaUltimoAno, capital + rendimentoCapital - saqueEfetivo);
-          } else {
-            saqueEfetivo = Math.max(0, capital + rendimentoCapital);
-            capitalFinal = 0;
-            if (idadeEsgotamento === null) idadeEsgotamento = idade;
-          }
+        // Se o capital ficar negativo ou zerar, marcar esgotamento no ano corrente e encerrar
+        if (capitalFinal <= 0) {
+          idadeEsgotamento = idade;
+          capital = 0;
+          patrimonioEsgotado = true;
+          break;
         }
 
         capital = capitalFinal;
-        if (capital === 0) {
-          patrimonioEsgotado = true;
-        }
         idade++;
       }
     }
@@ -590,13 +583,22 @@ const calculateRetirementProjection = (
 
     if (overrideAporteMensal != null) {
       // Usar a nova função para calcular renda permitida e idade de esgotamento
-      const { rendaPermitida, idadeEsgotamento, rendaUsadaNoCalculo } = calculatePermittedIncomeAndDepletionAge(overrideAporteMensal, saque_mensal_desejado);
+      const { rendaPermitida, idadeEsgotamento, rendaUsadaNoCalculo } = calculatePermittedIncomeAndDepletionAge(
+        idade_atual,
+        idade_para_aposentar,
+        expectativa_de_vida,
+        capitalDisponivelHoje,
+        overrideAporteMensal,
+        rentabilidade_real_liquida_acumulacao,
+        rentabilidade_real_liquida_consumo,
+        eventosLiquidez,
+        isPerpetuity,
+        saque_mensal_desejado
+      );
       return { 
         aporteMensal: overrideAporteMensal, 
         rendaMensal: rendaUsadaNoCalculo, 
-        capitalNecessario: calcCapitalNecessario(rendaPermitida),
-        idadeEsgotamento,
-        rendaPermitida
+        capitalNecessario: calcCapitalNecessario(rendaPermitida)
       };
     } else {
       // Calcular aporte para atingir a renda desejada e terminar com capital 0 aos 99 (considerando eventos)
@@ -853,6 +855,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   onProjectionChange,
   scenarios,
   hideControls,
+  isClientVersion,
   externalLiquidityEvents
 }) => {
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
@@ -862,7 +865,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   const [idadeAposentadoria, setIdadeAposentadoria] = useState<number>(retirementAge);
   const [isPerpetuity, setIsPerpetuity] = useState<boolean>(false);
   // Seletor de cenários: 'current' usa excedente; 'target' calcula aporte necessário
-  const [selectedScenario, setSelectedScenario] = useState<'current' | 'target'>("target");
+  const [selectedScenario, setSelectedScenario] = useState<'current' | 'target'>('current');
   const [excedentePct, setExcedentePct] = useState<number>(100);
   const [reachableIncome, setReachableIncome] = useState<number | null>(null);
   const [idadeEsgotamento, setIdadeEsgotamento] = useState<number | null>(null);
@@ -926,13 +929,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
 
   // Recalcular projeção sempre que inputs mudarem
   useEffect(() => {
-    // Se estivermos no Cenário Atual, forçar override do aporte como % do excedente atual
-    const aporteFromCurrentScenario = selectedScenario === 'current'
-      ? Math.max(0, (monthlyContribution || 0) * (excedentePct / 100))
-      : null;
-    const effectiveOverride = (selectedScenario === 'current' ? aporteFromCurrentScenario : overrideAporte);
-    
-
+    // Projeção principal com base no aporte editável (override quando presente)
+    const effectiveOverride = overrideAporte;
     const result = calculateRetirementProjection(
       currentAge,
       idadeAposentadoria,
@@ -945,42 +943,28 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       liquidityEvents,
       isPerpetuity,
       effectiveOverride,
-      selectedScenario === 'current' // quando cenário atual ativo, travamos saque na renda-alvo
+      false
     );
 
-    // Atualiza saídas conforme a origem da edição
-    if (effectiveOverride != null) {
-      setAporteMensal(effectiveOverride);
-      // No cenário atual, não alteramos a renda pretendida; mostramos a alcançável separadamente
-      if (selectedScenario !== 'current') {
-        setRendaMensal(result.rendaMensal);
-      }
-      // Atualizar idade de esgotamento se disponível
-      if (result.idadeEsgotamento !== undefined) {
-        setIdadeEsgotamento(result.idadeEsgotamento);
-      }
-    } else {
-      setAporteMensal(result.aporteMensal);
-      setIdadeEsgotamento(null); // Limpar idade de esgotamento no cenário target
-    }
-    // Renda alcançável com o aporte atual: calcula separadamente SEM travar a renda na meta
-    if (selectedScenario === 'current') {
-      // Calcular a renda alcançável usando a função específica
-      const { rendaPermitida } = calculatePermittedIncomeAndDepletionAge(
-        currentAge,
-        idadeAposentadoria,
-        lifeExpectancy,
-        currentPortfolio,
-        aporteFromCurrentScenario || 0,
-        taxaRetorno,
-        taxaRetorno,
-        liquidityEvents,
-        isPerpetuity
-      );
-      setReachableIncome(rendaPermitida);
-    } else {
-      setReachableIncome(null);
-    }
+    // Atualiza o aporte mostrado conforme o modo
+    setAporteMensal(effectiveOverride != null ? effectiveOverride : result.aporteMensal);
+
+    // Métrica paralela: renda alcançável e idade de esgotamento usando o excedente atual (100% do monthlyContribution)
+    const aporteAtual = Math.max(0, monthlyContribution || 0);
+    const { rendaPermitida, idadeEsgotamento: idadeFim } = calculatePermittedIncomeAndDepletionAge(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteAtual,
+      taxaRetorno,
+      taxaRetorno,
+      liquidityEvents,
+      isPerpetuity
+    );
+    setReachableIncome(rendaPermitida);
+    setIdadeEsgotamento(idadeFim ?? null);
+
     setProjection({
       ...result,
       fluxoCapital: result.fluxoCapital.map(item => ({
@@ -988,7 +972,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
         capital: Math.round(item.capital)
       }))
     });
-  }, [liquidityEvents, currentAge, idadeAposentadoria, lifeExpectancy, currentPortfolio, aporteMensal, rendaMensal, taxaRetorno, isPerpetuity, overrideAporte, selectedScenario, excedentePct, monthlyContribution]);
+  }, [liquidityEvents, currentAge, idadeAposentadoria, lifeExpectancy, currentPortfolio, monthlyContribution, rendaMensal, taxaRetorno, isPerpetuity, overrideAporte]);
 
   const [newEventRecurrence, setNewEventRecurrence] = useState<'once' | 'annual' | 'monthly'>('once');
   const [newEventStartAge, setNewEventStartAge] = useState<number>(currentAge + 5);
@@ -1059,7 +1043,67 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     }
   };
 
+  // Recalcula projeção e rendas quando os eventos de liquidez mudam
+  const recalculateAfterEventsChange = (updatedEvents: LiquidityEvent[]) => {
+    // Cenário Atual (usa excedente mensal atual)
+    const aporteAtual = Math.max(0, monthlyContribution || 0);
+    const { rendaPermitida: rendaAtual, idadeEsgotamento: idadeFimAtual } = calculatePermittedIncomeAndDepletionAge(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteAtual,
+      taxaRetorno,
+      taxaRetorno,
+      updatedEvents,
+      isPerpetuity
+    );
+    setReachableIncome(rendaAtual);
+    setIdadeEsgotamento(idadeFimAtual ?? null);
+
+    // Simulação (usa aporte editável ou override quando presente)
+    const aporteSim = Math.max(0, (overrideAporte != null ? overrideAporte : aporteMensal) || 0);
+    const { rendaPermitida: rendaSim } = calculatePermittedIncomeAndDepletionAge(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteSim,
+      taxaRetorno,
+      taxaRetorno,
+      updatedEvents,
+      isPerpetuity
+    );
+    setRendaMensal(rendaSim);
+
+    const result = calculateRetirementProjection(
+      currentAge,
+      idadeAposentadoria,
+      lifeExpectancy,
+      currentPortfolio,
+      aporteSim,
+      rendaSim,
+      taxaRetorno,
+      taxaRetorno,
+      updatedEvents,
+      isPerpetuity,
+      aporteSim,
+      false
+    );
+    setAporteMensal(overrideAporte != null ? aporteSim : result.aporteMensal);
+    setProjection({
+      ...result,
+      fluxoCapital: result.fluxoCapital.map(item => ({
+        age: item.idade,
+        capital: Math.round(item.capital)
+      }))
+    });
+  };
+
   const handleAddLiquidityEvent = async () => {
+    // Não permitir adicionar eventos na versão cliente
+    if (isClientVersion) return;
+    
     const startAge = newEventStartAge;
     const endAge = newEventRecurrence === 'once' ? undefined : (newEventEndAge === '' ? undefined : Number(newEventEndAge));
     if (!newEventName || startAge < currentAge || newEventValue <= 0) return;
@@ -1128,10 +1172,14 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   };
 
   const handleRemoveLiquidityEvent = async (id: string) => {
+    // Não permitir remover eventos na versão cliente
+    if (isClientVersion) return;
+    
     const updatedEvents = liquidityEvents.filter(event => event.id !== id);
     setLiquidityEvents(updatedEvents);
 
-    // Sincroniza com a API
+    // Recalcula projeção/rendas e sincroniza
+    recalculateAfterEventsChange(updatedEvents);
     await syncEventsToApi(updatedEvents);
   };
 
@@ -1139,32 +1187,15 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     const updatedEvents = liquidityEvents.map(ev => ev.id === id ? { ...ev, enabled } : ev);
     setLiquidityEvents(updatedEvents);
 
-    const result = calculateRetirementProjection(
-      currentAge,
-      idadeAposentadoria,
-      lifeExpectancy,
-      currentPortfolio,
-      aporteMensal,
-      rendaMensal,
-      taxaRetorno,
-      taxaRetorno,
-      updatedEvents,
-      isPerpetuity
-    );
-    setAporteMensal(result.aporteMensal);
-    setProjection({
-      ...result,
-      fluxoCapital: result.fluxoCapital.map(item => ({
-        age: item.idade,
-        capital: Math.round(item.capital)
-      }))
-    });
-
-    // Sincroniza com a API
+    // Recalcula projeção/rendas e sincroniza
+    recalculateAfterEventsChange(updatedEvents);
     await syncEventsToApi(updatedEvents);
   };
 
   const startEditLiquidityEvent = (ev: LiquidityEvent) => {
+    // Não permitir iniciar edição na versão cliente
+    if (isClientVersion) return;
+    
     setEditingEventId(ev.id);
     setEditName(ev.name);
     setEditValue(ev.value);
@@ -1175,6 +1206,9 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   };
 
   const saveEditLiquidityEvent = async () => {
+    // Não permitir editar eventos na versão cliente
+    if (isClientVersion) return;
+    
     if (!editingEventId) return;
     const startAge = editStartAge;
     const endAge = editRecurrence === 'once' ? undefined : (editEndAge === '' ? undefined : Number(editEndAge));
@@ -1197,28 +1231,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     setLiquidityEvents(updatedEvents);
     setEditingEventId(null);
 
-    const result = calculateRetirementProjection(
-      currentAge,
-      idadeAposentadoria,
-      lifeExpectancy,
-      currentPortfolio,
-      aporteMensal,
-      rendaMensal,
-      taxaRetorno,
-      taxaRetorno,
-      updatedEvents,
-      isPerpetuity
-    );
-    setAporteMensal(result.aporteMensal);
-    setProjection({
-      ...result,
-      fluxoCapital: result.fluxoCapital.map(item => ({
-        age: item.idade,
-        capital: Math.round(item.capital)
-      }))
-    });
-
-    // Sincroniza com a API
+    // Recalcula projeção/rendas e sincroniza
+    recalculateAfterEventsChange(updatedEvents);
     await syncEventsToApi(updatedEvents);
   };
 
@@ -1280,8 +1294,9 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   };
 
   return (
-    <Card className="w-full h-full border-border/80 shadow-sm">
-      <CardHeader className="px-6 pb-0">
+    <TooltipProvider>
+      <Card className="w-full h-full border-border/80 shadow-sm">
+        <CardHeader className="px-6 pb-0">
         <div className="flex flex-col w-full gap-4">
           <div className="w-full">
             <CardTitle className="text-xl font-semibold">
@@ -1295,31 +1310,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
             </CardDescription>
           </div>
 
-          {/* Seletor de Cenário */}
-          <div className="grid md:grid-cols-2 gap-3 mb-4">
-            <button
-              type="button"
-              className={`p-3 rounded-lg border text-left ${selectedScenario === 'current' ? 'border-accent bg-accent/10' : 'border-border/60 hover:bg-muted/30'}`}
-              onClick={() => {
-                setSelectedScenario('current');
-                setOverrideAporte(null);
-              }}
-            >
-              <div className="font-medium">Cenário Atual (com excedente)</div>
-              <div className="text-xs text-muted-foreground mt-1">Usa o excedente mensal atual (ajustável por %) como aporte recorrente até a aposentadoria. Eventos de fluxo são considerados. Modo perpétuo opcional.</div>
-            </button>
-            <button
-              type="button"
-              className={`p-3 rounded-lg border text-left ${selectedScenario === 'target' ? 'border-accent bg-accent/10' : 'border-border/60 hover:bg-muted/30'}`}
-              onClick={() => {
-                setSelectedScenario('target');
-                setOverrideAporte(null);
-              }}
-            >
-              <div className="font-medium">Cenário para Atingir a Renda Desejada (padrão)</div>
-              <div className="text-xs text-muted-foreground mt-1">Calcula o aporte necessário para atingir a renda pretendida na idade planejada, considerando eventos de fluxo. Modo perpétuo opcional.</div>
-            </button>
-          </div>
+          {/* Cenário único: usar apenas o aporte atual e exibir renda alcançável */}
 
           {/* Toggle de Perpetuidade */}
           <div className="flex items-center justify-between mb-4 p-3 bg-muted/30 rounded-lg">
@@ -1337,31 +1328,54 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
               onCheckedChange={(checked) => {
                 setIsPerpetuity(checked);
 
-                // Recalcula a projeção com o novo modo
-                const aporteFromCurrentScenario = selectedScenario === 'current' ? Math.max(0, (monthlyContribution || 0) * (excedentePct / 100)) : null;
+                // Cenário atual (lado esquerdo) usa o excedente mensal atual
+                const aporteAtual = Math.max(0, monthlyContribution || 0);
+                const { rendaPermitida: rendaAtual, idadeEsgotamento: idadeFimAtual } = calculatePermittedIncomeAndDepletionAge(
+                  currentAge,
+                  idadeAposentadoria,
+                  lifeExpectancy,
+                  currentPortfolio,
+                  aporteAtual,
+                  taxaRetorno,
+                  taxaRetorno,
+                  liquidityEvents,
+                  checked
+                );
+                setReachableIncome(rendaAtual);
+                setIdadeEsgotamento(idadeFimAtual ?? null);
+
+                // Simulação (lado direito) usa o aporte editável atual
+                const aporteSim = Math.max(0, (overrideAporte != null ? overrideAporte : aporteMensal) || 0);
+                const { rendaPermitida: rendaSim } = calculatePermittedIncomeAndDepletionAge(
+                  currentAge,
+                  idadeAposentadoria,
+                  lifeExpectancy,
+                  currentPortfolio,
+                  aporteSim,
+                  taxaRetorno,
+                  taxaRetorno,
+                  liquidityEvents,
+                  checked
+                );
+                // Ajusta automaticamente a renda objetivo da simulação
+                setRendaMensal(rendaSim);
+
+                // Recalcula projeção principal com os parâmetros da simulação
                 const result = calculateRetirementProjection(
                   currentAge,
                   idadeAposentadoria,
                   lifeExpectancy,
                   currentPortfolio,
-                  aporteMensal,
-                  rendaMensal,
+                  aporteSim,
+                  rendaSim,
                   taxaRetorno,
                   taxaRetorno,
                   liquidityEvents,
                   checked,
-                  aporteFromCurrentScenario,
-                  selectedScenario === 'current'
+                  aporteSim,
+                  true
                 );
 
-                // Atualiza o aporte mensal com o valor calculado
-                if (selectedScenario === 'current') {
-                  setAporteMensal(aporteFromCurrentScenario || 0);
-                } else {
-                  setAporteMensal(result.aporteMensal);
-                }
-
-                // Atualiza o gráfico com os novos dados
                 setProjection({
                   ...result,
                   fluxoCapital: result.fluxoCapital.map(item => ({
@@ -1369,35 +1383,148 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     capital: Math.round(item.capital)
                   }))
                 });
+
+                // Sincroniza eventos de fluxo com a API para refletir o modo atual
+                // (não altera a lista, apenas garante persistência do estado)
+                syncEventsToApi(liquidityEvents);
               }}
             />
           </div>
 
-          {/* Slider de % do Excedente quando Cenário Atual ativo */}
-          {selectedScenario === 'current' && (
-            <div className="space-y-2 mb-4">
-              <Label htmlFor="pctExcedente">% do Excedente utilizado ({excedentePct}%)</Label>
+          {/* Removido: slider de % do excedente. Sempre usa 100% do aporte atual. */}
+
+          {/* Seção Principal: Cenário Atual vs Simulação */}
+          <div className="grid lg:grid-cols-2 gap-6 mb-6">
+            {/* Cenário Atual (Baseado no Excedente) */}
+            <div className="space-y-4 p-4 rounded-lg" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.primary, borderWidth: '1px', borderStyle: 'solid' }}>
               <div className="flex items-center gap-2">
-                <Slider
-                  id="pctExcedente"
-                  value={[excedentePct]}
-                  min={0}
-                  max={100}
-                  step={5}
-                  onValueChange={(value) => setExcedentePct(value[0])}
-                  className="flex-1"
-                />
-                <div className="w-28 text-right text-sm font-medium">
-                  {formatCurrency(Math.max(0, (monthlyContribution || 0) * (excedentePct / 100)))}
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartPalette.primary }}></div>
+                <h3 className="font-semibold" style={{ color: chartPalette.primary }}>Cenário Atual</h3>
+              </div>
+              <p className="text-xs" style={{ color: chartPalette.primary, opacity: 0.8 }}>
+                Baseado no seu excedente mensal atual. Mostra o que você conseguiria com o que já tem disponível para investir.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm font-medium" style={{ color: chartPalette.primary }}>Excedente Mensal Atual</Label>
+                  <div className="text-lg font-semibold" style={{ color: chartPalette.primary }}>
+                    {formatCurrency(Math.max(0, monthlyContribution || 0))}
+                  </div>
+                  <p className="text-xs" style={{ color: chartPalette.primary, opacity: 0.7 }}>Valor disponível para investir</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.secondary, borderWidth: '1px', borderStyle: 'solid' }}>
+                    <div className="text-xs font-medium mb-1" style={{ color: chartPalette.secondary }}>Renda Alcançável até os 100 anos</div>
+                    <div className="text-sm font-bold" style={{ color: chartPalette.secondary }}>
+                      {formatCurrency(reachableIncome || 0)}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.emphasis, borderWidth: '1px', borderStyle: 'solid' }}>
+                    <div className="text-xs font-medium mb-1" style={{ color: chartPalette.emphasis }}>Esgota com renda objetivo (usando excedente atual)</div>
+                    <div className="text-sm font-bold" style={{ color: chartPalette.emphasis }}>
+                      {(() => {
+                        // Calcula ignorando o modo perpetuidade para mostrar o horizonte finito da renda objetivo
+                        const { idadeEsgotamento: idadeFinita } = calculatePermittedIncomeAndDepletionAge(
+                          currentAge,
+                          idadeAposentadoria,
+                          lifeExpectancy,
+                          currentPortfolio,
+                          Math.max(0, monthlyContribution || 0), // excedente mensal atual
+                          taxaRetorno,
+                          taxaRetorno,
+                          liquidityEvents,
+                          false,
+                          rendaMensal
+                        );
+                        return idadeFinita ? `${Math.round(idadeFinita)} anos` : 'Perpétuo';
+                      })()}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">Excedente atual: {formatCurrency(monthlyContribution || 0)} / mês</p>
             </div>
-          )}
 
-          <div className="grid md:grid-cols-4 gap-4 mb-6">
+            {/* Simulação (Aporte Editável) */}
+            <div className="space-y-4 p-4 rounded-lg" style={{ backgroundColor: chartPalette.alpha[4], borderColor: chartPalette.emphasis, borderWidth: '1px', borderStyle: 'solid' }}>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartPalette.emphasis }}></div>
+                <h3 className="font-semibold" style={{ color: chartPalette.emphasis }}>Simulação</h3>
+              </div>
+              <p className="text-xs" style={{ color: chartPalette.emphasis, opacity: 0.8 }}>
+                Teste diferentes cenários editando o aporte mensal e a renda objetivo. Veja como mudanças afetam seus resultados.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="aporteMensal" className="text-sm font-medium" style={{ color: chartPalette.emphasis }}>Aporte Mensal (editável)</Label>
+                  <CurrencyInput
+                    id="aporteMensal"
+                    value={aporteMensal}
+                    onChange={(value) => {
+                      setAporteMensal(value);
+                      setOverrideAporte(value);
+                      
+                      // Recalcular renda objetivo baseada no novo aporte
+                      const { rendaPermitida } = calculatePermittedIncomeAndDepletionAge(
+                        currentAge,
+                        idadeAposentadoria,
+                        lifeExpectancy,
+                        currentPortfolio,
+                        value,
+                        taxaRetorno,
+                        taxaRetorno,
+                        liquidityEvents,
+                        isPerpetuity
+                      );
+                      setRendaMensal(rendaPermitida);
+                    }}
+                    className="h-9 mt-1"
+                    disabled={false}
+                  />
+                  <p className="text-xs mt-1" style={{ color: chartPalette.emphasis, opacity: 0.7 }}>Teste diferentes valores de aporte</p>
+                </div>
+                
+                <div>
+                  <Label htmlFor="rendaMensal" className="text-sm font-medium" style={{ color: chartPalette.emphasis }}>Renda Objetivo</Label>
+                  <CurrencyInput
+                    id="rendaMensal"
+                    value={rendaMensal}
+                    onChange={(value) => {
+                      setRendaMensal(value);
+                      setOverrideAporte(null);
+                      
+                      // Recalcular aporte necessário para atingir a nova renda objetivo
+                      const result = calculateRetirementProjection(
+                        currentAge,
+                        idadeAposentadoria,
+                        lifeExpectancy,
+                        currentPortfolio,
+                        aporteMensal,
+                        value,
+                        taxaRetorno,
+                        taxaRetorno,
+                        liquidityEvents,
+                        isPerpetuity,
+                        null,
+                        false
+                      );
+                      setAporteMensal(result.aporteMensal);
+                    }}
+                    className="h-9 mt-1"
+                  />
+                  <p className="text-xs mt-1" style={{ color: chartPalette.emphasis, opacity: 0.7 }}>Objetivo: {formatCurrency(rendaMensalDesejada)}</p>
+                </div>
+
+                {/* Seção de resultados da simulação removida por solicitação */}
+              </div>
+            </div>
+          </div>
+
+
+          {/* Controles Avançados */}
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
             <div className="space-y-2">
-              <Label htmlFor="taxaRetorno">Taxa de Retorno Real</Label>
+              <Label htmlFor="taxaRetorno" style={{ color: chartPalette.primary }}>Taxa de Retorno Real</Label>
               <div className="flex items-center gap-2">
                 <Slider
                   id="taxaRetorno"
@@ -1410,7 +1537,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     setTaxaRetorno(newTaxaRetorno);
 
                     // Recalcula a projeção com os novos valores
-                    const aporteFromCurrentScenario = selectedScenario === 'current' ? Math.max(0, (monthlyContribution || 0) * (excedentePct / 100)) : null;
+                    const aporteAtual = Math.max(0, monthlyContribution || 0);
                     const result = calculateRetirementProjection(
                       currentAge,
                       idadeAposentadoria,
@@ -1422,18 +1549,27 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       newTaxaRetorno,
                       liquidityEvents,
                       isPerpetuity,
-                      aporteFromCurrentScenario,
-                      selectedScenario === 'current'
+                      overrideAporte,
+                      false
                     );
 
-                    // Atualiza o aporte mensal com o valor calculado
-                    if (selectedScenario === 'current') {
-                      setAporteMensal(aporteFromCurrentScenario || 0);
-                    } else {
-                      setAporteMensal(result.aporteMensal);
-                    }
+                    setAporteMensal(overrideAporte != null ? overrideAporte : result.aporteMensal);
 
-                    // Atualiza o gráfico com os novos dados
+                    // Atualiza renda alcançável e idade de esgotamento
+                    const { rendaPermitida, idadeEsgotamento: idadeFim } = calculatePermittedIncomeAndDepletionAge(
+                      currentAge,
+                      idadeAposentadoria,
+                      lifeExpectancy,
+                      currentPortfolio,
+                      aporteAtual,
+                      newTaxaRetorno,
+                      newTaxaRetorno,
+                      liquidityEvents,
+                      isPerpetuity
+                    );
+                    setReachableIncome(rendaPermitida);
+                    setIdadeEsgotamento(idadeFim ?? null);
+
                     setProjection({
                       ...result,
                       fluxoCapital: result.fluxoCapital.map(item => ({
@@ -1452,47 +1588,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="aporteMensal">Aporte Mensal (editável)</Label>
-              <CurrencyInput
-                id="aporteMensal"
-                value={aporteMensal}
-                onChange={(value) => {
-                  setAporteMensal(value);
-                  setOverrideAporte(value);
-                }}
-                className="h-9"
-                disabled={selectedScenario === 'current'}
-              />
-              {selectedScenario === 'current' && (
-                <p className="text-[11px] text-muted-foreground">Controlado pelo % do excedente acima</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="rendaMensal">Renda Mensal (editável)</Label>
-              <CurrencyInput
-                id="rendaMensal"
-                value={rendaMensal}
-                onChange={(value) => {
-                  setRendaMensal(value);
-                  // Se o usuário modificou a renda manualmente, cancelamos o override do aporte para voltar ao modo "calcular aporte"
-                  setOverrideAporte(null);
-                }}
-                className="h-9"
-              />
-              <p className="text-[11px] text-muted-foreground">Objetivo registrado: {formatCurrency(rendaMensalDesejada)}</p>
-              {selectedScenario === 'current' && (
-                <>
-                  <p className="text-[11px] text-muted-foreground">Renda alcançável com aporte atual: <span className="font-medium">{formatCurrency(reachableIncome || 0)}</span></p>
-                  {idadeEsgotamento && (
-                    <p className="text-[11px] text-muted-foreground">Patrimônio se esgota aos: <span className="font-medium">{Math.round(idadeEsgotamento)} anos</span></p>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="idadeAposentadoria">Idade de Aposentadoria</Label>
+              <Label htmlFor="idadeAposentadoria" style={{ color: chartPalette.primary }}>Idade de Aposentadoria</Label>
               <Input
                 id="idadeAposentadoria"
                 type="number"
@@ -1502,7 +1598,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   setIdadeAposentadoria(newAge);
 
                   // Recalcula a projeção com os novos valores
-                  const aporteFromCurrentScenario = selectedScenario === 'current' ? Math.max(0, (monthlyContribution || 0) * (excedentePct / 100)) : null;
+                  const aporteAtual = Math.max(0, monthlyContribution || 0);
                   const result = calculateRetirementProjection(
                     currentAge,
                     newAge,
@@ -1514,18 +1610,27 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     taxaRetorno,
                     liquidityEvents,
                     isPerpetuity,
-                    aporteFromCurrentScenario,
-                    selectedScenario === 'current'
+                    overrideAporte,
+                    false
                   );
 
-                  // Atualiza o aporte mensal com o valor calculado
-                  if (selectedScenario === 'current') {
-                    setAporteMensal(aporteFromCurrentScenario || 0);
-                  } else {
-                    setAporteMensal(result.aporteMensal);
-                  }
+                  setAporteMensal(overrideAporte != null ? overrideAporte : result.aporteMensal);
 
-                  // Atualiza o gráfico com os novos dados
+                  // Atualiza renda alcançável e idade de esgotamento
+                  const { rendaPermitida, idadeEsgotamento: idadeFim } = calculatePermittedIncomeAndDepletionAge(
+                    currentAge,
+                    newAge,
+                    lifeExpectancy,
+                    currentPortfolio,
+                    aporteAtual,
+                    taxaRetorno,
+                    taxaRetorno,
+                    liquidityEvents,
+                    isPerpetuity
+                  );
+                  setReachableIncome(rendaPermitida);
+                  setIdadeEsgotamento(idadeFim ?? null);
+
                   setProjection({
                     ...result,
                     fluxoCapital: result.fluxoCapital.map(item => ({
@@ -1538,22 +1643,22 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 max={90}
                 className="h-9"
               />
-              <p className="text-[11px] text-muted-foreground">Objetivo registrado: {retirementAge} anos</p>
+              <p className="text-xs text-muted-foreground">Objetivo: {retirementAge} anos</p>
             </div>
           </div>
 
           {/* Seção de Eventos de Liquidez */}
           <div className="flex items-center justify-between mb-0.5">
-            <Label>Eventos de Liquidez</Label>
-            <div className="text-xs text-muted-foreground">
+            <Label style={{ color: chartPalette.primary }}>Eventos de Liquidez</Label>
+            <div className="text-xs" style={{ color: chartPalette.primary, opacity: 0.7 }}>
               Eventos que afetam seu patrimônio em momentos específicos
             </div>
           </div>
 
           {/* Sugestões de rendas (inclusão manual) */}
           {Array.isArray(externalLiquidityEvents) && externalLiquidityEvents.filter(e => (e.isPositive !== false)).length > 0 && (
-            <div className="border border-dashed border-border rounded-md p-3 mb-3 bg-muted/20 w-full overflow-hidden">
-              <div className="text-xs text-muted-foreground mb-2">
+            <div className="border border-dashed rounded-md p-3 mb-3 w-full overflow-hidden" style={{ borderColor: chartPalette.primary, backgroundColor: chartPalette.alpha[4] }}>
+              <div className="text-xs mb-2" style={{ color: chartPalette.primary, opacity: 0.7 }}>
                 Rendas sugeridas a incluir (manual):
               </div>
               <div className="flex flex-wrap gap-2 w-full">
@@ -1571,11 +1676,11 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     ));
                     return (
                       <div key={s.id || s.name} className="px-2 py-1 rounded-md border text-xs w-full sm:w-auto min-w-0 max-w-full break-words"
-                        style={{ borderColor: '#21887C', color: '#21887C', backgroundColor: '#21887C20' }}
+                        style={{ borderColor: chartPalette.secondary, color: chartPalette.secondary, backgroundColor: chartPalette.alpha[8] }}
                         title={`${s.name} • ${(recurrence === 'once') ? 'Única' : (recurrence === 'annual' ? 'Anual' : 'Mensal')}`}
                       >
                         <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#21887C' }}></span>
+                          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: chartPalette.secondary }}></span>
                           <span className="truncate">{s.name}</span>
                           <span className="opacity-70">{startAge}+</span>
                           <span className="font-medium">{formatCurrency(Number(s.value || 0))}</span>
@@ -1583,7 +1688,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                         <button
                           onClick={() => addSuggestedIncome(s as any)}
                           disabled={alreadyIncluded}
-                          className={`w-full sm:w-auto sm:ml-auto h-6 px-2 rounded mt-1 sm:mt-0 ${alreadyIncluded ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#21887C] text-white'}`}
+                          className={`w-full sm:w-auto sm:ml-auto h-6 px-2 rounded mt-1 sm:mt-0 ${alreadyIncluded ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                          style={!alreadyIncluded ? { backgroundColor: chartPalette.secondary, color: 'white' } : {}}
                         >
                           {alreadyIncluded ? 'Incluída' : 'Incluir'}
                         </button>
@@ -1594,25 +1700,25 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
             </div>
           )}
 
-          <div className="border border-border rounded-md overflow-hidden mb-6">
+          <div className="border rounded-md overflow-hidden mb-6" style={{ borderColor: chartPalette.primary }}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[680px]">
-                <thead className="bg-muted/30">
+                <thead style={{ backgroundColor: chartPalette.alpha[8] }}>
                   <tr>
-                    <th className="py-2 px-3 text-left font-medium">Evento</th>
-                    <th className="py-2 px-3 text-center font-medium">Início</th>
-                    <th className="py-2 px-3 text-center font-medium">Término</th>
-                    <th className="py-2 px-3 text-center font-medium">Recorrência</th>
-                    <th className="py-2 px-3 text-center font-medium">Tipo</th>
-                    <th className="py-2 px-3 text-right font-medium">Valor</th>
-                    <th className="py-2 px-3 text-center font-medium">Ativo</th>
-                    <th className="py-2 px-3 text-center font-medium">Ações</th>
+                    <th className="py-2 px-3 text-left font-medium" style={{ color: chartPalette.primary }}>Evento</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Início</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Término</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Recorrência</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Tipo</th>
+                    <th className="py-2 px-3 text-right font-medium" style={{ color: chartPalette.primary }}>Valor</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Ativo</th>
+                    <th className="py-2 px-3 text-center font-medium" style={{ color: chartPalette.primary }}>Ações</th>
                   </tr>
                 </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y" style={{ borderColor: chartPalette.alpha[8] }}>
                 {liquidityEvents.map(event => (
                   editingEventId === event.id ? (
-                    <tr key={event.id} className="bg-accent/10">
+                    <tr key={event.id} style={{ backgroundColor: chartPalette.alpha[4] }}>
                       <td className="py-2 px-3">
                         <Input
                           value={editName}
@@ -1674,11 +1780,17 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={saveEditLiquidityEvent}
-                            className="text-green-600 hover:text-green-800 text-xs font-medium"
+                            className="text-xs font-medium"
+                            style={{ color: chartPalette.secondary }}
+                            onMouseEnter={(e) => (e.currentTarget as HTMLButtonElement).style.color = chartPalette.emphasis}
+                            onMouseLeave={(e) => (e.currentTarget as HTMLButtonElement).style.color = chartPalette.secondary}
                           >Salvar</button>
                           <button
                             onClick={cancelEditLiquidityEvent}
-                            className="text-muted-foreground hover:text-foreground text-xs"
+                            className="text-xs"
+                            style={{ color: chartPalette.primary, opacity: 0.7 }}
+                            onMouseEnter={(e) => (e.currentTarget as HTMLButtonElement).style.opacity = '1'}
+                            onMouseLeave={(e) => (e.currentTarget as HTMLButtonElement).style.opacity = '0.7'}
                           >Cancelar</button>
                         </div>
                       </td>
@@ -1690,7 +1802,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       <td className="py-2 px-3 text-center">{event.endAge != null ? `${event.endAge} anos` : '-'}</td>
                       <td className="py-2 px-3 text-center">{(event.recurrence || 'once') === 'once' ? 'Única' : (event.recurrence === 'annual' ? 'Anual' : 'Mensal')}</td>
                       <td className="py-2 px-3 text-center">
-                        <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium ${event.isPositive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        <span className="inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: event.isPositive ? chartPalette.alpha[8] : chartPalette.alpha[8], color: event.isPositive ? chartPalette.secondary : chartPalette.accent }}>
                           {event.isPositive ? 'Entrada' : 'Saída'}
                         </span>
                       </td>
@@ -1707,13 +1819,35 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                         <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => startEditLiquidityEvent(event)}
-                            className="text-blue-600 hover:text-blue-800"
-                            title="Editar"
+                            style={{ color: isClientVersion ? '#ccc' : chartPalette.primary }}
+                            onMouseEnter={(e) => {
+                              if (!isClientVersion) {
+                                (e.currentTarget as HTMLButtonElement).style.color = chartPalette.emphasis;
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isClientVersion) {
+                                (e.currentTarget as HTMLButtonElement).style.color = chartPalette.primary;
+                              }
+                            }}
+                            title={isClientVersion ? "Não permitido na versão cliente" : "Editar"}
+                            disabled={isClientVersion}
                           >✎</button>
                           <button
                             onClick={() => handleRemoveLiquidityEvent(event.id)}
-                            className="text-red-500 hover:text-red-700"
-                            title="Remover evento"
+                            style={{ color: isClientVersion ? '#ccc' : chartPalette.accent }}
+                            onMouseEnter={(e) => {
+                              if (!isClientVersion) {
+                                (e.currentTarget as HTMLButtonElement).style.color = chartPalette.emphasis;
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isClientVersion) {
+                                (e.currentTarget as HTMLButtonElement).style.color = chartPalette.accent;
+                              }
+                            }}
+                            title={isClientVersion ? "Não permitido na versão cliente" : "Remover evento"}
+                            disabled={isClientVersion}
                           >
                             ×
                           </button>
@@ -1724,13 +1858,14 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 ))}
 
                 {/* Formulário para adicionar novo evento */}
-                <tr className="bg-accent/5">
+                <tr style={{ backgroundColor: chartPalette.alpha[4] }}>
                   <td className="py-2 px-3">
                     <Input
                       placeholder="Nome do evento"
                       value={newEventName}
                       onChange={(e) => setNewEventName(e.target.value)}
                       className="h-8 text-xs"
+                      disabled={isClientVersion}
                     />
                   </td>
                   <td className="py-2 px-3 text-center">
@@ -1741,6 +1876,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       min={currentAge}
                       max={90}
                       className="h-8 text-xs w-20 mx-auto text-center"
+                      disabled={isClientVersion}
                     />
                   </td>
                   <td className="py-2 px-3 text-center">
@@ -1751,7 +1887,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       min={currentAge}
                       max={90}
                       className="h-8 text-xs w-20 mx-auto text-center"
-                      disabled={newEventRecurrence === 'once'}
+                      disabled={isClientVersion || newEventRecurrence === 'once'}
                     />
                   </td>
                   <td className="py-2 px-3 text-center">
@@ -1759,6 +1895,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       value={newEventRecurrence}
                       onChange={(e) => setNewEventRecurrence(e.target.value as 'once' | 'annual' | 'monthly')}
                       className="h-8 text-xs rounded-md border border-input bg-background px-2"
+                      disabled={isClientVersion}
                     >
                       <option value="once">Única</option>
                       <option value="annual">Anual</option>
@@ -1770,6 +1907,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       value={newEventType}
                       onChange={(e) => setNewEventType(e.target.value as 'positive' | 'negative')}
                       className="h-8 text-xs rounded-md border border-input bg-background px-2"
+                      disabled={isClientVersion}
                     >
                       <option value="positive">Entrada</option>
                       <option value="negative">Saída</option>
@@ -1780,14 +1918,16 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       value={newEventValue}
                       onChange={(value) => setNewEventValue(value)}
                       className="h-8 text-xs w-28 ml-auto"
+                      disabled={isClientVersion}
                     />
                   </td>
                   <td className="py-2 px-3 text-center">
                     <button
                       onClick={handleAddLiquidityEvent}
-                      className="bg-primary text-white h-8 w-8 rounded-full flex items-center justify-center text-lg font-bold"
-                      title="Adicionar evento"
-                      disabled={!newEventName || newEventStartAge < currentAge || newEventValue <= 0 || (newEventRecurrence !== 'once' && newEventEndAge !== '' && Number(newEventEndAge) < newEventStartAge)}
+                      className="h-8 w-8 rounded-full flex items-center justify-center text-lg font-bold"
+                      style={{ backgroundColor: chartPalette.primary, color: 'white' }}
+                      title={isClientVersion ? "Não permitido na versão cliente" : "Adicionar evento"}
+                      disabled={isClientVersion || !newEventName || newEventStartAge < currentAge || newEventValue <= 0 || (newEventRecurrence !== 'once' && newEventEndAge !== '' && Number(newEventEndAge) < newEventStartAge)}
                     >
                       +
                     </button>
@@ -1808,32 +1948,32 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                 data={filteredData}
                 margin={{ top: 25, right: 30, left: 20, bottom: 40 }}
               >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} style={{ stroke: chartPalette.alpha[8] }} />
                 <XAxis
                   dataKey="age"
-                  label={{ value: 'Idade', position: 'insideBottom', offset: -15, fill: '#6b7280', fontSize: 12 }}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  tickLine={{ stroke: '#9CA3AF' }}
-                  axisLine={{ stroke: '#d1d5db' }}
+                  label={{ value: 'Idade', position: 'insideBottom', offset: -15, fill: chartPalette.primary, fontSize: 12 }}
+                  tick={{ fill: chartPalette.primary, fontSize: 11 }}
+                  tickLine={{ stroke: chartPalette.primary }}
+                  axisLine={{ stroke: chartPalette.primary }}
                   padding={{ left: 10, right: 10 }}
                   domain={xDomain}
                 />
                 <YAxis
                   tickFormatter={formatYAxis}
                   domain={[0, 'auto']}
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  tickLine={{ stroke: '#9CA3AF' }}
-                  axisLine={{ stroke: '#d1d5db' }}
+                  tick={{ fill: chartPalette.primary, fontSize: 11 }}
+                  tickLine={{ stroke: chartPalette.primary }}
+                  axisLine={{ stroke: chartPalette.primary }}
                   label={{
                     value: 'Patrimônio',
                     angle: -90,
                     position: 'insideLeft',
                     offset: -5,
-                    fill: '#6b7280',
+                    fill: chartPalette.primary,
                     fontSize: 12
                   }}
                 />
-                <Tooltip
+                <RechartsTooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
                       const age = payload[0]?.payload.age;
@@ -1862,7 +2002,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                                 {activeEvents.map((e) => (
                                   <div key={e.id} className="flex items-center justify-between gap-3 text-xs">
                                     <div className="flex items-center gap-1.5">
-                                      <div className={`w-2 h-2 rounded-full ${e.isPositive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: e.isPositive ? chartPalette.secondary : chartPalette.accent }} />
                                       <span className="text-muted-foreground">{e.name}</span>
                                     </div>
                                     <span className="font-medium tabular-nums">{formatCurrency(e.value)}</span>
@@ -1914,7 +2054,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   wrapperStyle={{
                     paddingTop: 15,
                     fontSize: 11,
-                    lineHeight: '1.2em'
+                    lineHeight: '1.2em',
+                    color: chartPalette.primary
                   }}
                   iconType="plainline"
                   iconSize={10}
@@ -1951,15 +2092,15 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   key={e.id}
                   className={`px-2 py-1 border text-xs w-full sm:w-auto rounded-md sm:rounded-full min-w-0 break-words`}
                   style={{
-                    borderColor: e.isPositive ? '#21887C' : '#E52B50',
-                    color: e.isPositive ? '#21887C' : '#E52B50',
-                    backgroundColor: e.isPositive ? '#21887C20' : '#E52B5020'
+                    borderColor: e.isPositive ? chartPalette.secondary : chartPalette.accent,
+                    color: e.isPositive ? chartPalette.secondary : chartPalette.accent,
+                    backgroundColor: e.isPositive ? chartPalette.alpha[8] : chartPalette.alpha[8]
                   }}
                   title={`${e.name} • ${e.recurrence && e.recurrence !== 'once' ? 'Recorrente' : 'Único'}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 w-full">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={`inline-block w-2 h-2 rounded-full`} style={{ backgroundColor: e.isPositive ? '#21887C' : '#E52B50' }}></span>
+                      <span className={`inline-block w-2 h-2 rounded-full`} style={{ backgroundColor: e.isPositive ? chartPalette.secondary : chartPalette.accent }}></span>
                       <span className="font-medium truncate">{e.name}</span>
                     </div>
                     <span className="hidden sm:inline mx-1">—</span>
@@ -1977,99 +2118,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
           </div>
         )}
 
-        {/* Tabela de informações sobre o cenário */}
-        <div className="mt-6 border border-border rounded-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[420px]">
-              <thead className="bg-muted/30">
-                <tr>
-                  <th className="py-2 px-3 text-left font-medium">Detalhe</th>
-                  <th className="py-2 px-3 text-right font-medium">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  // Aporte necessário para atingir a renda alvo (ignorando overrides)
-                  const recomputeForNeeded = calculateRetirementProjection(
-                    currentAge,
-                    idadeAposentadoria,
-                    lifeExpectancy,
-                    currentPortfolio,
-                    aporteMensal,
-                    rendaMensal,
-                    taxaRetorno,
-                    taxaRetorno,
-                    liquidityEvents,
-                    isPerpetuity,
-                    null
-                  );
-                  const aporteNecessario = recomputeForNeeded.aporteMensal || 0;
-                  const aporteAtual = selectedScenario === 'current'
-                    ? Math.max(0, (monthlyContribution || 0) * (excedentePct / 100))
-                    : (overrideAporte != null ? overrideAporte : projection.aporteMensal);
-                  const aporteAdicional = Math.max(0, aporteNecessario - (aporteAtual || 0));
-                  return (
-                    <>
-                      {selectedScenario === 'current' && (
-                        <tr>
-                          <td className="py-2 px-3">Aporte Atual (excedente usado)</td>
-                          <td className="py-2 px-3 text-right">{formatCurrency(aporteAtual)}</td>
-                        </tr>
-                      )}
-                      <tr>
-                        <td className="py-2 px-3">Aporte Mensal Necessário</td>
-                        <td className="py-2 px-3 text-right">{formatCurrency(aporteNecessario)}</td>
-                      </tr>
-                      {selectedScenario === 'current' && (
-                        <tr>
-                          <td className="py-2 px-3">Aporte Adicional p/ Objetivo</td>
-                          <td className="py-2 px-3 text-right">{formatCurrency(aporteAdicional)}</td>
-                        </tr>
-                      )}
-                      {selectedScenario === 'current' && (
-                        <tr>
-                          <td className="py-2 px-3">Renda Permitida (atual)</td>
-                          <td className="py-2 px-3 text-right">{formatCurrency(reachableIncome || 0)}</td>
-                        </tr>
-                      )}
-                      {selectedScenario === 'current' && idadeEsgotamento && (
-                        <tr>
-                          <td className="py-2 px-3">Idade de Esgotamento</td>
-                          <td className="py-2 px-3 text-right">{Math.round(idadeEsgotamento)} anos</td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })()}
-                <tr>
-                  <td className="py-2 px-3">Investimentos Financeiros Alvo</td>
-                  <td className="py-2 px-3 text-right">{formatCurrency(Math.round(projection.capitalNecessario))}</td>
-                </tr>
-                <tr>
-                  <td className="py-2 px-3">Retirada Mensal Planejada</td>
-                  <td className="py-2 px-3 text-right">{formatCurrency(rendaMensal)}</td>
-                </tr>
-                {selectedScenario === 'current' && reachableIncome != null && (
-                  <tr>
-                    <td className="py-2 px-3">Renda Alcançável (Cenário Atual)</td>
-                    <td className="py-2 px-3 text-right">{formatCurrency(reachableIncome)}</td>
-                  </tr>
-                )}
-                <tr>
-                  <td className="py-2 px-3">Duração do Patrimônio</td>
-                  <td className="py-2 px-3 text-right">
-                    {isPerpetuity ?
-                      "Perpétuo (nunca se esgota)" :
-                      (projection.idadeEsgotamento ?
-                        `Até os ${projection.idadeEsgotamento} anos (${projection.idadeEsgotamento - idadeAposentadoria} anos)` :
-                        `Até os ${lifeExpectancy} anos`)
-                    }
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Tabela de informações sobre o cenário removida por solicitação */}
 
         {/* Tabela de Fluxo de Caixa Anual com ocultar */}
         <HideableCard
@@ -2125,6 +2174,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
         </HideableCard>
       </CardContent>
     </Card>
+    </TooltipProvider>
   );
 };
 

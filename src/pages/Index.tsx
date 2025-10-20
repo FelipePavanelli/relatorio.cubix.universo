@@ -412,6 +412,7 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
                     objetivos: (getClientData() as any)?.objetivos || []
                   } as any}
                   hideControls={clientPropect}
+                  isClientVersion={clientPropect}
                 />
               </HideableSection>
               

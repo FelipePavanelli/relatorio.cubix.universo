@@ -296,29 +296,226 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
-                <UiCard className="p-4">
-                  <div className="text-sm text-muted-foreground mb-2">Modelo Completo</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>Base de Cálculo</div>
-                    <div className="text-right font-medium">{formatCurrency(irpf.complete.taxableBase)}</div>
-                    <div>Imposto Devido</div>
-                    <div className="text-right font-medium">{formatCurrency(irpf.complete.taxDue)}</div>
-                    <div>Alíquota Efetiva</div>
-                    <div className="text-right font-medium">{irpf.complete.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</div>
+
+              {/* Detalhes dos Cálculos e Projeção Integrados */}
+              <div className="mt-8">
+                <h4 className="text-lg font-semibold mb-6">Detalhamento dos Cálculos e Projeção de Economia</h4>
+
+                {/* Layout Principal - 2 colunas principais */}
+                <div className="grid lg:grid-cols-2 gap-8">
+                  
+                  {/* Coluna Esquerda - Comparativo dos Modelos */}
+                  <div className="space-y-6">
+                    <h5 className="text-md font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Calculator size={18} className="text-accent" />
+                      Comparativo dos Modelos de Declaração
+                    </h5>
+                    
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {/* Modelo Completo - Detalhes */}
+                      <div className="bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/30 rounded-xl p-5 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+                            <Calculator size={16} className="text-accent" />
+                          </div>
+                          <h6 className="font-semibold text-accent">Modelo Completo</h6>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between items-center py-2 border-b border-accent/20">
+                            <span className="text-foreground font-medium">Renda Tributável</span>
+                            <span className="font-semibold text-accent">{formatCurrency(rendaTributavelAnual)}</span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="text-foreground font-medium text-xs">Deduções Legais:</div>
+                            
+                            <div className="flex justify-between items-center pl-3 text-xs">
+                              <span className="text-muted-foreground">• PGBL (12%)</span>
+                              <span className="font-medium text-foreground">{formatCurrency(Math.min(pgblAnual, rendaTributavelAnual * 0.12))}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pl-3 text-xs">
+                              <span className="text-muted-foreground">• Dependentes ({numDependentes})</span>
+                              <span className="font-medium text-foreground">{formatCurrency(numDependentes * 2275.08)}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pl-3 text-xs">
+                              <span className="text-muted-foreground">• Educação</span>
+                              <span className="font-medium text-foreground">{formatCurrency(Math.min(gastoEducacao, (numDependentes + 1) * 3561.50))}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center pl-3 text-xs">
+                              <span className="text-muted-foreground">• Saúde</span>
+                              <span className="font-medium text-foreground">{formatCurrency(gastoSaude)}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center py-2 border-t border-accent/20 font-semibold">
+                              <span className="text-foreground">Total Deduções</span>
+                              <span className="text-accent">{formatCurrency(Math.min(pgblAnual, rendaTributavelAnual * 0.12) + (numDependentes * 2275.08) + Math.min(gastoEducacao, (numDependentes + 1) * 3561.50) + gastoSaude)}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-b border-accent/20">
+                            <span className="text-foreground font-medium">Base de Cálculo</span>
+                            <span className="font-semibold text-accent">{formatCurrency(irpf.complete.taxableBase)}</span>
+                          </div>
+                          
+                          <div className="bg-accent/10 p-3 rounded-lg">
+                            <div className="text-foreground font-medium mb-2 text-xs">Tabela Progressiva:</div>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <div>• Até R$ 27.110,40: Isento</div>
+                              <div>• R$ 27.110,41 a R$ 33.919,80: 7,5%</div>
+                              <div>• R$ 33.919,81 a R$ 45.012,60: 15%</div>
+                              <div>• R$ 45.012,61 a R$ 55.976,16: 22,5%</div>
+                              <div>• Acima de R$ 55.976,16: 27,5%</div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-t border-accent/30 font-semibold bg-accent/5 rounded-lg px-3">
+                            <span className="text-foreground">Imposto Devido</span>
+                            <span className="text-accent text-lg">{formatCurrency(irpf.complete.taxDue)}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-t border-accent/30 font-semibold bg-accent/5 rounded-lg px-3">
+                            <span className="text-foreground">Alíquota Efetiva</span>
+                            <span className="text-accent text-lg">{irpf.complete.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Modelo Simplificado - Detalhes */}
+                      <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/30 rounded-xl p-5 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                            <Calculator size={16} className="text-primary" />
+                          </div>
+                          <h6 className="font-semibold text-primary">Modelo Simplificado</h6>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between items-center py-2 border-b border-primary/20">
+                            <span className="text-foreground font-medium">Renda Tributável</span>
+                            <span className="font-semibold text-primary">{formatCurrency(rendaTributavelAnual)}</span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="text-foreground font-medium text-xs">Desconto Simplificado:</div>
+                            
+                            <div className="flex justify-between items-center pl-3 text-xs">
+                              <span className="text-muted-foreground">• 20% da renda</span>
+                              <span className="font-medium text-primary">{formatCurrency(Math.min(rendaTributavelAnual * 0.20, 16754.34))}</span>
+                            </div>
+                            
+                            <div className="text-xs text-muted-foreground bg-primary/10 p-2 rounded">
+                              <strong>Fórmula:</strong> min(renda × 20%, R$ 16.754,34)
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-b border-primary/20">
+                            <span className="text-foreground font-medium">Base de Cálculo</span>
+                            <span className="font-semibold text-primary">{formatCurrency(irpf.simplified.taxableBase)}</span>
+                          </div>
+                          
+                          <div className="bg-primary/10 p-3 rounded-lg">
+                            <div className="text-foreground font-medium mb-2 text-xs">Tabela Progressiva:</div>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <div>• Até R$ 27.110,40: Isento</div>
+                              <div>• R$ 27.110,41 a R$ 33.919,80: 7,5%</div>
+                              <div>• R$ 33.919,81 a R$ 45.012,60: 15%</div>
+                              <div>• R$ 45.012,61 a R$ 55.976,16: 22,5%</div>
+                              <div>• Acima de R$ 55.976,16: 27,5%</div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-t border-primary/30 font-semibold bg-primary/5 rounded-lg px-3">
+                            <span className="text-foreground">Imposto Devido</span>
+                            <span className="text-primary text-lg">{formatCurrency(irpf.simplified.taxDue)}</span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center py-2 border-t border-primary/30 font-semibold bg-primary/5 rounded-lg px-3">
+                            <span className="text-foreground">Alíquota Efetiva</span>
+                            <span className="text-primary text-lg">{irpf.simplified.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </UiCard>
-                <UiCard className="p-4">
-                  <div className="text-sm text-muted-foreground mb-2">Modelo Simplificado</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>Base de Cálculo</div>
-                    <div className="text-right font-medium">{formatCurrency(irpf.simplified.taxableBase)}</div>
-                    <div>Imposto Devido</div>
-                    <div className="text-right font-medium">{formatCurrency(irpf.simplified.taxDue)}</div>
-                    <div>Alíquota Efetiva</div>
-                    <div className="text-right font-medium">{irpf.simplified.effectiveRate.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 2 })}</div>
+
+                  {/* Coluna Direita - Projeção de Economia */}
+                  <div className="bg-gradient-to-br from-muted/10 to-muted/20 border border-border rounded-xl p-6 shadow-sm">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
+                        <Calculator size={16} className="text-accent" />
+                      </div>
+                      <h5 className="font-semibold text-foreground">Projeção de Economia Tributária</h5>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      {/* Economia Anual Projetada */}
+                      <div>
+                        <h6 className="text-sm font-semibold text-foreground mb-3">Economia Anual Projetada</h6>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center py-3 px-4 bg-accent/5 border border-accent/20 rounded-lg">
+                            <span className="text-sm text-muted-foreground">Economia anual atual</span>
+                            <span className="font-bold text-accent text-lg">
+                              {formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue))}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 px-4 bg-muted/30 rounded-lg">
+                            <span className="text-sm text-muted-foreground">5 anos</span>
+                            <span className="font-semibold text-primary">
+                              {formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 5)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 px-4 bg-muted/30 rounded-lg">
+                            <span className="text-sm text-muted-foreground">10 anos</span>
+                            <span className="font-semibold text-primary">
+                              {formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 10)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 px-4 bg-muted/30 rounded-lg">
+                            <span className="text-sm text-muted-foreground">20 anos</span>
+                            <span className="font-semibold text-accent">
+                              {formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 20)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Cenários de Crescimento */}
+                      <div>
+                        <h6 className="text-sm font-semibold text-foreground mb-3">Cenários de Crescimento</h6>
+                        <div className="space-y-3">
+                          <div className="bg-gradient-to-r from-accent/10 to-accent/5 border border-accent/30 rounded-lg p-4">
+                            <div className="text-sm font-semibold text-accent mb-1">Cenário Conservador (10% a.a.)</div>
+                            <div className="text-xs text-muted-foreground">
+                              Economia em 10 anos: <span className="font-semibold text-accent">{formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 15.94)}</span>
+                            </div>
+                          </div>
+                          <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-lg p-4">
+                            <div className="text-sm font-semibold text-primary mb-1">Cenário Moderado (15% a.a.)</div>
+                            <div className="text-xs text-muted-foreground">
+                              Economia em 10 anos: <span className="font-semibold text-primary">{formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 20.30)}</span>
+                            </div>
+                          </div>
+                          <div className="bg-gradient-to-r from-muted/20 to-muted/10 border border-border rounded-lg p-4">
+                            <div className="text-sm font-semibold text-foreground mb-1">Cenário Otimista (20% a.a.)</div>
+                            <div className="text-xs text-muted-foreground">
+                              Economia em 10 anos: <span className="font-semibold text-foreground">{formatCurrency(Math.abs(irpf.complete.taxDue - irpf.simplified.taxDue) * 25.96)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-6 p-4 bg-accent/5 border border-accent/20 rounded-lg">
+                      <div className="text-xs text-muted-foreground">
+                        <strong>Nota:</strong> Os cenários consideram a economia anual como um "aporte" que se repete a cada ano, 
+                        aplicando a fórmula de valor futuro de uma série de pagamentos iguais (anualidade). 
+                        Os percentuais representam o crescimento da renda e consequente aumento da economia tributária.
+                      </div>
+                    </div>
                   </div>
-                </UiCard>
+                </div>
               </div>
             </CardContent>
             <CardFooter>

@@ -42,10 +42,18 @@ const HideableCard: React.FC<HideableCardProps> = ({
         </button>
       )}
 
-      {children}
+      <div
+        className={cn(
+          'transition-all',
+          !isVisible && !hideControls && 'blur-[2px] opacity-60 grayscale'
+        )}
+        aria-hidden={!isVisible && !hideControls ? true : undefined}
+      >
+        {children}
+      </div>
 
       {!isVisible && (
-        <div className="absolute inset-0 bg-slate-100/30 flex justify-end items-end p-1">
+        <div className="absolute inset-0 bg-slate-100/30 flex justify-end items-end p-1 pointer-events-none">
           <div className="text-[10px] text-slate-600 font-medium">
             oculto para cliente
           </div>

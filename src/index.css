@@ -266,6 +266,11 @@
 }
 
 @layer utilities {
+  /* Espaçamento reduzido para seções ocultas */
+  .section-collapsed {
+    @apply pt-6 pb-6 min-h-[20vh];
+  }
+
   .animate-spin-slow {
     animation: spin 10s linear infinite;
   }
