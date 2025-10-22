@@ -105,6 +105,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
 
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
 
+
   // Verificar se dados estão disponíveis
   if (!data) {
     return (
@@ -117,15 +118,16 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
     );
   }
 
+
   // Verificar se temos dados detalhados preenchidos
-  const hasDetailedData = data.investimentosDetalhados && 
+  const hasDetailedData = data?.investimentosDetalhados && 
     (data.investimentosDetalhados.por_classe.renda_fixa !== null ||
      data.investimentosDetalhados.por_classe.renda_variavel !== null ||
      data.investimentosDetalhados.por_classe.multimercado !== null ||
      data.investimentosDetalhados.por_classe.outras !== null);
 
   // Calcular totais
-  const totalCurrent = data.totalInvestimentos || data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
+  const totalCurrent = data?.totalInvestimentos || 0;
   
   // Se temos dados detalhados, usar eles; senão, usar os dados atuais
   const currentInvestmentsData = hasDetailedData ? 
@@ -134,7 +136,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
       const investments: Investment[] = [];
       
       // Mapear dados detalhados para o formato Investment
-      if (detailed.por_classe.renda_fixa !== null) {
+      if (detailed.por_classe.renda_fixa !== null && detailed.por_classe.renda_fixa > 0) {
         investments.push({
           tipo: 'Renda Fixa',
           valor: detailed.por_classe.renda_fixa,
@@ -144,7 +146,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           rentabilidade: 0
         });
       }
-      if (detailed.por_classe.renda_variavel !== null) {
+      if (detailed.por_classe.renda_variavel !== null && detailed.por_classe.renda_variavel > 0) {
         investments.push({
           tipo: 'Renda Variável',
           valor: detailed.por_classe.renda_variavel,
@@ -154,7 +156,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           rentabilidade: 0
         });
       }
-      if (detailed.por_classe.multimercado !== null) {
+      if (detailed.por_classe.multimercado !== null && detailed.por_classe.multimercado > 0) {
         investments.push({
           tipo: 'Multimercado',
           valor: detailed.por_classe.multimercado,
@@ -164,7 +166,7 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
           rentabilidade: 0
         });
       }
-      if (detailed.por_classe.outras !== null) {
+      if (detailed.por_classe.outras !== null && detailed.por_classe.outras > 0) {
         investments.push({
           tipo: 'Outros',
           valor: detailed.por_classe.outras,
@@ -175,38 +177,33 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
         });
       }
       
-      // Se não temos nenhum dado detalhado preenchido, usar dados de fallback
-      if (investments.length === 0) {
-        // Recalcular os dados de fallback para somar o total_investimentos
-        const fallbackTotal = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
-        const scaleFactor = totalCurrent / fallbackTotal;
-        
-        return data.investimentosAtuais.map(inv => ({
-          ...inv,
-          valor: Math.round(inv.valor * scaleFactor)
-        }));
-      }
-      
       return investments;
     })() : 
+    (data?.investimentosAtuais || []);
+
+  const sugestaoAltaVista = data?.sugestaoAltaVista || [];
+  
+
+  // Processar sugestões - verificar se há dados
+  const recalculatedSuggestions = sugestaoAltaVista.length > 0 ? 
+    sugestaoAltaVista.map(inv => ({
+      ...inv,
+      valor: Math.round((inv.percentual / 100) * totalCurrent)
+    })) : 
+    // Se não há sugestões, criar sugestões padrão baseadas no total
     (() => {
-      // Quando não temos dados detalhados, recalcular os dados de fallback
-      const fallbackTotal = data.investimentosAtuais.reduce((sum, inv) => sum + inv.valor, 0);
-      const scaleFactor = totalCurrent / fallbackTotal;
-      
-      return data.investimentosAtuais.map(inv => ({
-        ...inv,
-        valor: Math.round(inv.valor * scaleFactor)
-      }));
+      if (totalCurrent > 0) {
+        return [
+          { tipo: 'Renda Fixa', valor: Math.round(totalCurrent * 0.5), percentual: 50, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0 },
+          { tipo: 'Renda Variável', valor: Math.round(totalCurrent * 0.3), percentual: 30, risco: 'Alto', liquidez: 'Média', rentabilidade: 0 },
+          { tipo: 'Multimercado', valor: Math.round(totalCurrent * 0.2), percentual: 20, risco: 'Médio', liquidez: 'Média', rentabilidade: 0 }
+        ];
+      }
+      return [];
     })();
   
-  // Recalcular sugestões baseadas no total_investimentos
-  const recalculatedSuggestions = data.sugestaoAltaVista.map(inv => ({
-    ...inv,
-    valor: Math.round((inv.percentual / 100) * totalCurrent)
-  }));
+  const totalSuggested = totalCurrent;
   
-  const totalSuggested = totalCurrent; // O total sugerido deve ser igual ao total atual
 
   // Preparar dados para os gráficos
   const currentChartData = currentInvestmentsData.map(inv => ({
@@ -342,16 +339,23 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   legendPosition="bottom"
                 />
                 <div className="mt-4 space-y-2">
-                  {currentInvestmentsData.map((inv, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 bg-muted/30 rounded">
-                      <span className="text-sm font-medium">{inv.tipo}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
-                        <span className="text-sm">{inv.percentual}%</span>
-                        {/* Risk chip removed by request */}
+                  {currentInvestmentsData.length > 0 ? (
+                    currentInvestmentsData.map((inv, index) => (
+                      <div key={index} className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                        <span className="text-sm font-medium">{inv.tipo}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
+                          <span className="text-sm">{inv.percentual}%</span>
+                          {/* Risk chip removed by request */}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p className="text-sm">Nenhum investimento encontrado</p>
+                      <p className="text-xs mt-1">Verifique os dados de investimentos</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </HideableCard>
@@ -384,16 +388,23 @@ const InvestmentManagement: React.FC<InvestmentManagementProps> = ({ data, hideC
                   legendPosition="bottom"
                 />
                 <div className="mt-4 space-y-2">
-                  {recalculatedSuggestions.map((inv, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 bg-primary/10 rounded">
-                      <span className="text-sm font-medium">{inv.tipo}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
-                        <span className="text-sm">{inv.percentual}%</span>
-                        {/* Risk chip removed by request */}
+                  {recalculatedSuggestions.length > 0 ? (
+                    recalculatedSuggestions.map((inv, index) => (
+                      <div key={index} className="flex justify-between items-center p-2 bg-primary/10 rounded">
+                        <span className="text-sm font-medium">{inv.tipo}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-muted-foreground hidden sm:inline">{formatCurrency(inv.valor)}</span>
+                          <span className="text-sm">{inv.percentual}%</span>
+                          {/* Risk chip removed by request */}
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p className="text-sm">Nenhuma sugestão disponível</p>
+                      <p className="text-xs mt-1">Verifique os dados de sugestões</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </HideableCard>

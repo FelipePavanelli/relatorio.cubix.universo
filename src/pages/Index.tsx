@@ -189,25 +189,30 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
         totalInvestimentos: userReports?.financas?.investimentos_detalhados?.total_investimentos || 0,
         investimentosDetalhados: userReports?.financas?.investimentos_detalhados,
         investimentosAtuais: (() => {
-          const atuais = userReports?.investimentos?.atuais || [
-            { tipo: 'Tesouro Direto', valor: 300000, percentual: 35, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.115 },
-            { tipo: 'CDB', valor: 200000, percentual: 23, risco: 'Baixo', liquidez: 'Alta', rentabilidade: 0.125 },
-            { tipo: 'Ações', valor: 180000, percentual: 21, risco: 'Alto', liquidez: 'Média', rentabilidade: 0.18 },
-            { tipo: 'Fundos Imobiliários', valor: 120000, percentual: 14, risco: 'Médio', liquidez: 'Baixa', rentabilidade: 0.15 },
-            { tipo: 'Previdência', valor: 60000, percentual: 7, risco: 'Baixo', liquidez: 'Baixa', rentabilidade: 0.13 }
-          ];
+          const atuais = userReports?.investimentos?.atuais;
+          // Se não há dados reais, retornar array vazio ao invés de dados mockados
+          if (!atuais || atuais.length === 0) {
+            return [];
+          }
           return aggregateCurrentInvestments(atuais);
         })(),
         sugestaoAltaVista: (() => {
           // Se vier da API, priorizar
           if (userReports?.investimentos?.sugestao) return userReports.investimentos.sugestao;
+          
+          // Se não há dados de investimentos, retornar array vazio
+          const totalAtual = (userReports?.investimentos?.atuais || []).reduce((sum: number, inv: any) => sum + (inv.valor || 0), 0) || 0;
+          const baseTotal = (userReports?.financas?.composicao_patrimonial?.Investimentos || 0) || totalAtual;
+          
+          if (baseTotal === 0) {
+            return [];
+          }
+          
           // Caso contrário, montar a partir do perfil declarado e alocação por classe
           const perfil = normalizePerfil(userReports?.perfil_investidor || 'Moderado');
           const classes = MODEL_CLASS_ALLOCATION[perfil] || MODEL_CLASS_ALLOCATION['Moderado'];
           // Agregar classes conforme regra: Pós/IPCA/Pré => Renda Fixa; RV Brasil/FII => Renda Variável; Multimercado permanece; demais => Outros
           const aggregated = aggregateModelClasses(classes);
-          const totalAtual = (userReports?.investimentos?.atuais || []).reduce((sum: number, inv: any) => sum + (inv.valor || 0), 0) || 0;
-          const baseTotal = (userReports?.financas?.composicao_patrimonial?.Investimentos || 0) || totalAtual
           const suggested = aggregated
             .filter(c => c.percentual > 0)
             .map(c => ({
