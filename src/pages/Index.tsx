@@ -81,6 +81,14 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
           renda_passiva: (r as any)?.renda_passiva ?? (r as any)?.rendaPassiva ?? false
         })),
         despesasMensais: userReports?.financas?.resumo?.despesas_mensais || 0,
+        despesas: (userReports?.financas?.despesas || []).map((d: any) => ({
+          tipo: d.tipo,
+          subtipo: d.subtipo,
+          valor: d.valor,
+          periodicidade: d.periodicidade,
+          formaPagamento: d.formaPagamento,
+          observacoes: d.observacoes
+        })),
         // Utilizar diretamente a composição patrimonial do JSON, sem transformação
         composicaoPatrimonial: userReports?.financas?.composicao_patrimonial || {},
         // Processar os ativos de forma dinâmica, independente do tipo
@@ -437,9 +445,11 @@ const IndexPage: React.FC<IndexPageProps> = ({ accessor, clientPropect }) => {
                 <SuccessionPlanning data={getClientData()} hideControls={clientPropect} />
               </HideableSection>
               
-              <HideableSection sectionId="action-plan" hideControls={clientPropect}>
-                <ActionPlan data={getClientData()} hideControls={clientPropect} />
-              </HideableSection>
+              {!clientPropect && (
+                <HideableSection sectionId="action-plan" hideControls={clientPropect}>
+                  <ActionPlan data={getClientData()} hideControls={clientPropect} />
+                </HideableSection>
+              )}
             </main>
             <DotNavigation />
             <MobileDotNavigation />

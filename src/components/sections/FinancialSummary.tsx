@@ -17,6 +17,7 @@ interface FinanceSummary {
   excedenteMensal: number;
   rendas: Array<{ fonte?: string; descricao?: string; valor: number; tributacao?: string }>;
   despesasMensais: number;
+  despesas?: Array<{ tipo?: string; subtipo?: string; valor: number; periodicidade?: string; formaPagamento?: string; observacoes?: string }>;
   composicaoPatrimonial: Record<string, number>;
   ativos: Array<{ tipo: string; valor: number; classe?: string }>;
   passivos: Array<{ tipo: string; valor: number }>;
@@ -216,15 +217,47 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({ data, hideControls 
                   <div>
                     <h4 className="font-medium mb-2">Despesas</h4>
                     <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="text-sm">
-                          <div className="font-medium">Despesas Mensais</div>
+                      {data.despesas && data.despesas.length > 0 ? (
+                        data.despesas.map((despesa, index) => {
+                          // Calcular valor mensal e anual baseado na periodicidade
+                          const valorMensal = despesa.periodicidade === 'anual' 
+                            ? despesa.valor / 12 
+                            : despesa.valor;
+                          const valorAnual = despesa.periodicidade === 'anual'
+                            ? despesa.valor
+                            : despesa.valor * 12;
+                          
+                          return (
+                            <div key={index} className="flex justify-between items-start">
+                              <div className="text-sm">
+                                <div className="font-medium">
+                                  {despesa.tipo || 'Despesa'}
+                                  {despesa.subtipo && (
+                                    <span className="text-muted-foreground"> - {despesa.subtipo}</span>
+                                  )}
+                                </div>
+                                {despesa.observacoes && (
+                                  <div className="text-xs text-muted-foreground">{despesa.observacoes}</div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-6">
+                                <div className="text-sm font-medium">{formatCurrency(valorMensal)} / mês</div>
+                                <div className="text-sm font-medium text-muted-foreground">{formatCurrency(valorAnual)} / ano</div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="flex justify-between items-start">
+                          <div className="text-sm">
+                            <div className="font-medium">Despesas Mensais</div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-sm font-medium">{formatCurrency(data.despesasMensais)} / mês</div>
+                            <div className="text-sm font-medium text-muted-foreground">{formatCurrency(data.despesasMensais * 12)} / ano</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-6">
-                          <div className="text-sm font-medium">{formatCurrency(data.despesasMensais)} / mês</div>
-                          <div className="text-sm font-medium text-muted-foreground">{formatCurrency(data.despesasMensais * 12)} / ano</div>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>

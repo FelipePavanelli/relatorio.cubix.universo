@@ -10,6 +10,7 @@ interface HideableCardProps {
   children: React.ReactNode;
   className?: string;
   hideControls?: boolean;
+  opacityLevel?: 'normal' | 'high' | 'very-high';
 }
 
 const HideableCard: React.FC<HideableCardProps> = ({
@@ -19,6 +20,7 @@ const HideableCard: React.FC<HideableCardProps> = ({
   children,
   className,
   hideControls = false,
+  opacityLevel = 'very-high',
 }) => {
   if (hideControls && !isVisible) {
     return null;
@@ -45,7 +47,12 @@ const HideableCard: React.FC<HideableCardProps> = ({
       <div
         className={cn(
           'transition-all',
-          !isVisible && !hideControls && 'blur-[2px] opacity-60 grayscale'
+          !isVisible && !hideControls && [
+            'blur-[2px] grayscale',
+            opacityLevel === 'normal' && 'opacity-60',
+            opacityLevel === 'high' && 'opacity-30',
+            opacityLevel === 'very-high' && 'opacity-20',
+          ]
         )}
         aria-hidden={!isVisible && !hideControls ? true : undefined}
       >
