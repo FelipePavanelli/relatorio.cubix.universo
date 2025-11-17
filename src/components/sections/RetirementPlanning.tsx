@@ -1,5 +1,5 @@
-import React from 'react';
-import { BarChart, Wallet, PiggyBank, LineChart, Calculator, Calendar, ArrowRight, AlertCircle, TrendingUp, Shield, Globe, Target, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { BarChart, Wallet, PiggyBank, LineChart, Calculator, Calendar, ArrowRight, AlertCircle, TrendingUp, Shield, Globe, Target, FileText, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import HideableCard from '@/components/ui/HideableCard';
@@ -64,6 +64,9 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
     idadeAposentadoria: data?.idadeAposentadoria || 65
   });
 
+  // Taxa de retorno real compartilhada com o simulador/PGBL
+  const [realReturnRate, setRealReturnRate] = React.useState<number>(data?.taxaJurosReal ?? 0.03);
+
   // Valores declarados pelo cliente (não mudam com a simulação)
   const [declaredGoal, setDeclaredGoal] = React.useState<{ rendaMensalPretendida: number; idadeAposentadoriaPretendida: number }>({
     rendaMensalPretendida: data?.rendaMensalDesejada || 0,
@@ -89,6 +92,63 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
   
   // Usar excedente ajustado se tivermos dados de renda, caso contrário usar o valor original
   const excedenteMensal = todasRendas.length > 0 ? excedenteMensalAjustado : (data?.excedenteMensal || 0);
+
+  // Calcular renda tributável para cálculo de PGBL
+  const isIsento = (txt?: string) => (txt || '').toLowerCase().includes('isento');
+  const rendaTributavelMensal = rendasFiltradas
+    .filter((r: any) => !isIsento(r?.tributacao))
+    .reduce((acc: number, r: any) => acc + (Number(r?.valor) || 0), 0);
+  const rendaTributavelAnual = rendaTributavelMensal * 12;
+
+  // Calcular anos até aposentadoria
+  const idadeAtual = data?.idadeAtual || 0;
+  const idadeAposentadoria = data?.idadeAposentadoria || 65;
+  const anosAteAposentadoria = Math.max(0, idadeAposentadoria - idadeAtual);
+
+  // Calcular valor total de aportes PGBL acumulados até aposentadoria
+  // Considerando 12% da renda tributável anual, capitalizados até a data de aposentadoria
+  const pgblAnual = rendaTributavelAnual * 0.12; // 12% da renda tributável anual
+  const taxaRetornoReal = realReturnRate || 0.03;
+  
+  // Calcular valor futuro dos aportes PGBL acumulados
+  // Considera aportes anuais de 12% da renda tributável, capitalizados até aposentadoria
+  const calcularValorFuturoPGBL = useMemo(() => {
+    if (anosAteAposentadoria <= 0 || pgblAnual <= 0) return 0;
+    
+    // Valor futuro de uma série de pagamentos (anualidade) com capitalização
+    // Cada aporte anual é capitalizado até a data de aposentadoria
+    let valorFuturo = 0;
+    for (let ano = 1; ano <= anosAteAposentadoria; ano++) {
+      // Aporte no ano atual (mantido em termos reais, sem inflação)
+      const aporteAno = pgblAnual;
+      
+      // Anos restantes até aposentadoria para capitalizar este aporte
+      const anosRestantes = anosAteAposentadoria - ano;
+      
+      // Valor futuro deste aporte capitalizado
+      const valorFuturoAporte = aporteAno * Math.pow(1 + taxaRetornoReal, anosRestantes);
+      valorFuturo += valorFuturoAporte;
+    }
+    
+    return valorFuturo;
+  }, [pgblAnual, anosAteAposentadoria, taxaRetornoReal]);
+
+  // Criar evento de liquidez sugerido para PGBL
+  const pgblLiquidityEvent = useMemo(() => {
+    if (calcularValorFuturoPGBL <= 0) return null;
+    
+    return {
+      id: 'pgbl-contributions',
+      name: `Aportes PGBL acumulados (12% da renda tributável)`,
+      value: calcularValorFuturoPGBL,
+      isPositive: true,
+      recurrence: 'once' as const,
+      startAge: idadeAposentadoria,
+      endAge: null,
+      enabled: false, // Não habilitado por padrão, apenas sugerido
+      isDerived: true
+    };
+  }, [calcularValorFuturoPGBL, idadeAposentadoria]);
 
   // Calculate percentage of income that should be invested (aligned with spreadsheet)
   const percentualInvestir = () => {
@@ -146,7 +206,7 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
   };
 
   // Valores derivados apenas para exibição amigável
-  const realInterestRatePercent = ((data?.taxaJurosReal ?? 0.03) * 100).toFixed(1);
+  const realInterestRatePercent = ((taxaRetornoReal ?? 0.03) * 100).toFixed(1);
   const lifeExpectancyYears = data?.expectativaVida ?? 100;
 
   return (
@@ -333,6 +393,9 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                 onProjectionChange={setProjectionData}
                 hideControls={hideControls}
                 isClientVersion={isClientVersion}
+                pgblAnual={pgblAnual}
+                taxaRetornoInicial={taxaRetornoReal}
+                onTaxaRetornoChange={(rate) => setRealReturnRate(rate)}
                 externalLiquidityEvents={(() => {
                   const idadeAtual = Number(data?.idadeAtual) || 0;
                   const aposentadoria = Number(data?.idadeAposentadoria) || 65;
@@ -399,7 +462,14 @@ const RetirementPlanning: React.FC<RetirementPlanningProps> = ({ data, hideContr
                       };
                     });
 
-                  return [...passiveIncomeEvents, ...goalEvents];
+                  const events = [...passiveIncomeEvents, ...goalEvents];
+                  
+                  // Adicionar evento PGBL como sugestão (não habilitado por padrão)
+                  if (pgblLiquidityEvent) {
+                    events.push(pgblLiquidityEvent);
+                  }
+                  
+                  return events;
                 })()}
               />
             </CardContent>

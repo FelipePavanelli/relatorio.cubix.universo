@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Card,
   CardHeader,
@@ -28,6 +28,7 @@ import { calculateIrpfComparison } from '@/utils/irpf';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { Card as UiCard } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
 
 interface TaxPlanningProps {
   data: any;
@@ -109,6 +110,12 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
     )
   );
   const [pgblAnual, setPgblAnual] = useState<number>(pgblAnnualMax);
+  const pgblPercentualUtilizado = pgblAnnualMax > 0 ? Math.round((pgblAnual / pgblAnnualMax) * 100) : 0;
+
+  // Atualizar pgblAnual quando pgblAnnualMax mudar (ex: quando incluir cônjuge muda)
+  useEffect(() => {
+    setPgblAnual(pgblAnnualMax);
+  }, [pgblAnnualMax]);
 
   const irpf = useMemo(() => calculateIrpfComparison({
     annualTaxableIncome: rendaTributavelAnual,
@@ -341,6 +348,32 @@ const TaxPlanning: React.FC<TaxPlanningProps> = ({ data, hideControls }) => {
                   <div className="text-2xl font-bold text-financial-info mb-2">{formatCurrency(pgblAnual)}</div>
                   <div className="text-xs text-muted-foreground">
                     Limite máximo: {formatCurrency(rendaTributavelAnual * 0.12)} (12% da renda)
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-2">
+                      <span>Percentual do limite utilizado</span>
+                      <span className="font-semibold text-foreground text-xs">{pgblPercentualUtilizado}%</span>
+                    </div>
+                    <Slider
+                      value={[pgblPercentualUtilizado]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      disabled={pgblAnnualMax <= 0}
+                      onValueChange={(value) => {
+                        if (pgblAnnualMax <= 0) {
+                          setPgblAnual(0);
+                          return;
+                        }
+                        const percent = Math.min(100, Math.max(0, value[0]));
+                        const novoValor = (percent / 100) * pgblAnnualMax;
+                        setPgblAnual(novoValor);
+                      }}
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-2">
+                      <span>Atual: {formatCurrency(pgblAnual)} / ano</span>
+                      <span>{formatCurrency(pgblAnual / 12 || 0)} / mês</span>
+                    </div>
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-financial-info/10 to-financial-info/5 p-5 rounded-xl border-2 border-financial-info/30">

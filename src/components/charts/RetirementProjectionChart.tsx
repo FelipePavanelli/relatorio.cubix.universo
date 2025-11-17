@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { getLiquidityEvents, saveLiquidityEvents, LiquidityEventApi } from '@/services/liquidityEventsService';
+import { Info } from 'lucide-react';
 
 // Custom currency input component
 const CurrencyInput: React.FC<{
@@ -108,6 +109,9 @@ interface RetirementProjectionChartProps {
     enabled?: boolean;
     isDerived?: boolean;
   }>;
+  pgblAnual?: number;
+  taxaRetornoInicial?: number;
+  onTaxaRetornoChange?: (taxa: number) => void;
 }
 
 interface LiquidityEvent {
@@ -213,7 +217,8 @@ const calculatePermittedIncomeAndDepletionAge = (
   rentabilidade_real_liquida_consumo: number,
   eventosLiquidez: LiquidityEvent[],
   isPerpetuity: boolean,
-  rendaMensalParaCalculo?: number
+  rendaMensalParaCalculo?: number,
+  forceZeroAtEnd: boolean = true
 ) => {
   try {
     // Verificar se os valores são válidos
@@ -307,8 +312,8 @@ const calculatePermittedIncomeAndDepletionAge = (
       // Perpetuidade: renda = capital * taxa mensal
       rendaPermitida = (capitalTotalAposentadoria + pvEventosPosApos) * taxa_mensal_real_consumo;
     } else {
-      // Finito: calcular PMT para esgotar o capital aos 99 anos
-      const mesesConsumo = (99 - idade_para_aposentar) * 12;
+      // Finito: calcular PMT para esgotar o capital aos 99 anos (incluindo o ano 99 completo)
+      const mesesConsumo = (99 - idade_para_aposentar + 1) * 12;
       if (taxa_mensal_real_consumo === 0) {
         rendaPermitida = (capitalTotalAposentadoria + pvEventosPosApos) / mesesConsumo;
       } else {
@@ -361,17 +366,7 @@ const calculatePermittedIncomeAndDepletionAge = (
     } else {
       // Cenário finito: simular sempre até 99 e zerar no último ano
       const consumoEndAge = 99;
-      let patrimonioEsgotado = false;
       while (idade <= consumoEndAge) {
-        // Se o patrimônio já foi esgotado em ano anterior, ignoramos eventos e mantemos tudo zerado
-        if (patrimonioEsgotado) {
-          if (idadeEsgotamento === null) idadeEsgotamento = Math.min(idadeEsgotamento ?? idade, idade);
-          capital = 0;
-          patrimonioEsgotado = true;
-          idade++;
-          continue;
-        }
-
         // Aplica eventos de liquidez no ano atual
         const delta = eventsByAge.get(idade) || 0;
         capital += delta;
@@ -385,14 +380,24 @@ const calculatePermittedIncomeAndDepletionAge = (
           : saqueMensal * ((fatorAnualConsumo - 1) / taxaMensalConsumo);
 
         const rendimentoCapital = capital * (fatorAnualConsumo - 1);
-        const capitalFinal = capital + rendimentoCapital - fvSaques;
+        let capitalFinal = capital + rendimentoCapital - fvSaques;
 
-        // Se o capital ficar negativo ou zerar, marcar esgotamento no ano corrente e encerrar
-        if (capitalFinal <= 0) {
+        // Se o capital ficaria negativo ANTES do ano 99, ajustamos o saque mas continuamos até os 99
+        if (capitalFinal < 0 && idade < consumoEndAge) {
+          // Limita o saque ao que está disponível
+          capitalFinal = 0;
+          // NÃO marca esgotamento aqui - apenas ajusta e continua
+        }
+
+        if (!forceZeroAtEnd && capitalFinal <= 0 && idadeEsgotamento === null) {
+          capitalFinal = 0;
           idadeEsgotamento = idade;
-          capital = 0;
-          patrimonioEsgotado = true;
-          break;
+        }
+
+        // Forçar término APENAS no final do ano 99
+        if (forceZeroAtEnd && idade === consumoEndAge) {
+          capitalFinal = 0;
+          if (idadeEsgotamento === null) idadeEsgotamento = idade;
         }
 
         capital = capitalFinal;
@@ -453,8 +458,9 @@ const calculateRetirementProjection = (
       } else {
         // Base: PV das retiradas mensais até o final do ano 99 (sempre termina no final do ano 99)
         const consumoEndAge = 99;
-        // Ajuste: considerar que o capital deve durar até o final do ano 99 (incluindo o ano 99)
-        const meses_consumo = (consumoEndAge - idade_para_aposentar) * 12;
+        // Ajuste: considerar que o capital deve durar até o final do ano 99 (incluindo o ano 99 completo)
+        // Se aposenta aos 65, precisa durar: anos 65, 66, ..., 99 = 35 anos = 420 meses
+        const meses_consumo = (consumoEndAge - idade_para_aposentar + 1) * 12;
         const base = (saque_mensal_desejado * (1 - Math.pow(1 + taxa_mensal_consumo, -meses_consumo)) / taxa_mensal_consumo);
 
         // Ajuste: eventos pós-aposentadoria (entradas reduzem capital necessário; saídas aumentam)
@@ -549,8 +555,9 @@ const calculateRetirementProjection = (
         return Math.max(0, rendaAlvo / taxa_mensal_real_consumo - pvEventosPosApos);
       } else {
         const consumoEndAge = 99;
-        // Ajuste: considerar que o capital deve durar até o final do ano 99 (incluindo o ano 99)
-        const meses_consumo = (consumoEndAge - idade_para_aposentar) * 12;
+        // Ajuste: considerar que o capital deve durar até o final do ano 99 (incluindo o ano 99 completo)
+        // Se aposenta aos 65, precisa durar: anos 65, 66, ..., 99 = 35 anos = 420 meses
+        const meses_consumo = (consumoEndAge - idade_para_aposentar + 1) * 12;
         const taxa_mensal_real_consumo = Math.pow(1 + rentabilidade_real_liquida_consumo, 1 / 12) - 1;
         let pvEventosPosApos = 0;
         const effectiveEvents = (eventosLiquidez || []).filter(e => e.enabled !== false);
@@ -620,7 +627,8 @@ const calculateRetirementProjection = (
   })();
 
   // Simulação do fluxo de capital (ajustado para a lógica da planilha)
-  const simularFluxoCapital = () => {
+  const simularFluxoCapital = (options?: { forceZeroAtEnd?: boolean }) => {
+    const forceZeroAtEnd = options?.forceZeroAtEnd ?? true;
     const fluxo = [];
     const fluxoCaixaAnual: Array<{
       idade: number;
@@ -666,9 +674,6 @@ const calculateRetirementProjection = (
       const delta = eventsByAge.get(idade) || 0;
       capital += delta;
 
-      // Registra o capital após os eventos (para o gráfico)
-      fluxo.push({ idade, capital });
-
       // Capitalização mensal equivalente para 12 meses
       const taxaMensalReal = Math.pow(1 + rentabilidade_real_liquida_acumulacao, 1 / 12) - 1;
       const fatorAnual = Math.pow(1 + taxaMensalReal, 12);
@@ -699,6 +704,9 @@ const calculateRetirementProjection = (
         capitalFinal
       });
 
+      // Registra o capital FINAL do ano (após todos os cálculos) para o gráfico
+      fluxo.push({ idade, capital: capitalFinal });
+
       capital = capitalFinal;
       idade++;
     }
@@ -716,9 +724,6 @@ const calculateRetirementProjection = (
         // Eventos são exibidos, porém não alteram o principal em perpetuidade
         const delta = eventsByAge.get(idade) || 0;
 
-        // Registra o capital após os eventos (para o gráfico)
-        fluxo.push({ idade, capital: capitalInicial > 0 ? capitalInicial : 0 });
-
         // Em perpetuidade, saque = rendimento -> principal constante
         const saqueEfetivo = saque_mensal_desejado * 12;
         const rendimentoCapital = saqueEfetivo;
@@ -735,38 +740,20 @@ const calculateRetirementProjection = (
           capitalFinal
         });
 
+        // Registra o capital FINAL do ano (após todos os cálculos) para o gráfico
+        fluxo.push({ idade, capital: capitalFinal > 0 ? capitalFinal : 0 });
+
         capital = capitalFinal;
         idade++;
       }
     } else {
       const consumoEndAge = 99;
-      let patrimonioEsgotado = false;
       while (idade <= consumoEndAge) {
         const capitalInicial = capital;
 
-        // Se o patrimônio já foi esgotado em ano anterior, ignoramos eventos e mantemos tudo zerado
-        if (patrimonioEsgotado) {
-          fluxo.push({ idade, capital: 0 });
-          fluxoCaixaAnual.push({
-            idade,
-            fase: 'Consumo',
-            capitalInicial: 0,
-            eventos: 0,
-            aporte: 0,
-            rendimento: 0,
-            saque: 0,
-            capitalFinal: 0
-          });
-          capital = 0;
-          idade++;
-          continue;
-        }
-
-        // Aplica eventos de liquidez no ano atual (agregados)
+        // Aplica eventos de liquidez no ano atual (agregados) - aplica ANTES de calcular rendimento
         const delta = eventsByAge.get(idade) || 0;
-
-        // Registra o capital antes dos fluxos do ano (para o gráfico)
-        fluxo.push({ idade, capital: capital > 0 ? capital : 0 });
+        capital += delta; // Aplica eventos primeiro
 
         // Capitalização mensal equivalente na fase de consumo
         const taxaMensalConsumo = Math.pow(1 + rentabilidade_real_liquida_consumo, 1 / 12) - 1;
@@ -778,20 +765,28 @@ const calculateRetirementProjection = (
 
         const rendimentoCapital = capital * (fatorAnualConsumo - 1);
         let saqueEfetivo = fvSaques; // valor futuro dos 12 saques mensais
-        // Aplica evento como fluxo do ano após rendimento
-        let capitalFinal = capital + rendimentoCapital + delta - saqueEfetivo;
+        
+        // Calcula capital final: capital (já com eventos) + rendimento - saques
+        let capitalFinal = capital + rendimentoCapital - saqueEfetivo;
 
-        // Se o capital ficaria negativo ANTES do ano 99, limitamos o saque do ano para não ficar negativo
+        // Se o capital ficaria negativo ANTES do ano 99, ajustamos o saque para não ficar negativo
+        // Mas NÃO marcamos esgotamento - continuamos até os 99 anos
         if (capitalFinal < 0 && idade < consumoEndAge) {
-          saqueEfetivo = Math.max(0, capital + rendimentoCapital + delta);
+          // Limita o saque ao que está disponível (capital + rendimento)
+          saqueEfetivo = Math.max(0, capital + rendimentoCapital);
           capitalFinal = 0;
-          if (idadeEsgotamento === null) idadeEsgotamento = idade;
+          // NÃO marca esgotamento aqui - apenas ajusta o saque
+        }
+
+        if (!forceZeroAtEnd && capitalFinal <= 0 && idadeEsgotamento === null) {
+          capitalFinal = 0;
+          idadeEsgotamento = idade;
         }
 
         // Forçar término APENAS no final do ano 99: no último ano do horizonte, drenar o saldo remanescente
-        // Só força esgotamento se o capital ainda for positivo (cliente precisa aportar)
-        if (idade === consumoEndAge && capitalFinal > 0) {
-          saqueEfetivo = capital + rendimentoCapital + delta;
+        if (forceZeroAtEnd && idade === consumoEndAge) {
+          // No último ano, sempre drenar o saldo remanescente
+          saqueEfetivo = Math.max(0, capital + rendimentoCapital);
           capitalFinal = 0;
           if (idadeEsgotamento === null) idadeEsgotamento = idade;
         }
@@ -807,10 +802,10 @@ const calculateRetirementProjection = (
           capitalFinal
         });
 
+        // Registra o capital FINAL do ano (após todos os cálculos) para o gráfico
+        fluxo.push({ idade, capital: capitalFinal > 0 ? capitalFinal : 0 });
+
         capital = capitalFinal;
-        if (capital === 0) {
-          patrimonioEsgotado = true;
-        }
         idade++;
       }
     }
@@ -818,7 +813,8 @@ const calculateRetirementProjection = (
     return { fluxo, fluxoCaixaAnual, idadeEsgotamento };
   };
 
-  const resultado = simularFluxoCapital();
+  const shouldForceZeroAtEnd = overrideAporteMensal == null ? aporteMensal > 0 : true;
+  const resultado = simularFluxoCapital({ forceZeroAtEnd: shouldForceZeroAtEnd });
   const fluxoCapital = resultado.fluxo;
   const idadeEsgotamento = resultado.idadeEsgotamento;
   const fluxoCaixaAnual = resultado.fluxoCaixaAnual;
@@ -856,11 +852,15 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
   scenarios,
   hideControls,
   isClientVersion,
-  externalLiquidityEvents
+  externalLiquidityEvents,
+  pgblAnual,
+  taxaRetornoInicial,
+  onTaxaRetornoChange
 }) => {
   const { isCardVisible, toggleCardVisibility } = useCardVisibility();
   // Removed selectedView state since we only show the complete scenario
-  const [taxaRetorno, setTaxaRetorno] = useState<number>(0.03); // 3% real ao ano como na planilha
+  const initialReturnRate = typeof taxaRetornoInicial === 'number' ? taxaRetornoInicial : 0.03;
+  const [taxaRetorno, setTaxaRetorno] = useState<number>(initialReturnRate); // 3% real ao ano como na planilha
   const [rendaMensal, setRendaMensal] = useState<number>(rendaMensalDesejada);
   const [idadeAposentadoria, setIdadeAposentadoria] = useState<number>(retirementAge);
   const [isPerpetuity, setIsPerpetuity] = useState<boolean>(false);
@@ -877,8 +877,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       currentPortfolio,
       monthlyContribution,
       rendaMensalDesejada,
-      0.03,
-      0.03,
+      initialReturnRate,
+      initialReturnRate,
       [],
       false
     );
@@ -996,8 +996,8 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       currentPortfolio,
       monthlyContribution,
       rendaMensalDesejada,
-      0.03,
-      0.03,
+      initialReturnRate,
+      initialReturnRate,
       [],
       false
     );
@@ -1009,6 +1009,12 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       }))
     };
   });
+
+  useEffect(() => {
+    if (typeof taxaRetornoInicial === 'number' && Math.abs(taxaRetornoInicial - taxaRetorno) > 0.0001) {
+      setTaxaRetorno(taxaRetornoInicial);
+    }
+  }, [taxaRetornoInicial]);
 
   // Atualizar API ao adicionar/remover evento
   const syncEventsToApi = async (events: LiquidityEvent[]) => {
@@ -1261,6 +1267,43 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
     return [currentAge, 100];
   }, [currentAge]);
 
+  // Calcular ticks customizados para o eixo X baseado no range de idades
+  const xAxisTicks = React.useMemo(() => {
+    const range = 100 - currentAge;
+    const ticks: number[] = [];
+    
+    // Determinar o intervalo baseado no range
+    let interval: number;
+    if (range <= 30) {
+      interval = 2; // Mostrar de 2 em 2 anos
+    } else if (range <= 50) {
+      interval = 5; // Mostrar de 5 em 5 anos
+    } else {
+      interval = 10; // Mostrar de 10 em 10 anos
+    }
+    
+    // Sempre incluir a idade atual e 100
+    ticks.push(currentAge);
+    
+    // Adicionar ticks no intervalo calculado
+    for (let age = Math.ceil(currentAge / interval) * interval; age < 100; age += interval) {
+      if (age > currentAge && age < 100) {
+        ticks.push(age);
+      }
+    }
+    
+    // Sempre incluir a idade de aposentadoria se estiver no range
+    if (idadeAposentadoria > currentAge && idadeAposentadoria < 100 && !ticks.includes(idadeAposentadoria)) {
+      ticks.push(idadeAposentadoria);
+    }
+    
+    // Sempre incluir 100 (ou 99 se for o caso)
+    ticks.push(100);
+    
+    // Ordenar e remover duplicatas
+    return [...new Set(ticks)].sort((a, b) => a - b);
+  }, [currentAge, idadeAposentadoria]);
+
   const filteredData = React.useMemo(() => {
     // Always show complete scenario
     return projection.fluxoCapital;
@@ -1413,33 +1456,10 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   <p className="text-xs" style={{ color: chartPalette.primary, opacity: 0.7 }}>Valor disponível para investir</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.secondary, borderWidth: '1px', borderStyle: 'solid' }}>
-                    <div className="text-xs font-medium mb-1" style={{ color: chartPalette.secondary }}>Renda Alcançável até os 100 anos</div>
-                    <div className="text-sm font-bold" style={{ color: chartPalette.secondary }}>
-                      {formatCurrency(reachableIncome || 0)}
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.emphasis, borderWidth: '1px', borderStyle: 'solid' }}>
-                    <div className="text-xs font-medium mb-1" style={{ color: chartPalette.emphasis }}>Esgota com renda objetivo (usando excedente atual)</div>
-                    <div className="text-sm font-bold" style={{ color: chartPalette.emphasis }}>
-                      {(() => {
-                        // Calcula ignorando o modo perpetuidade para mostrar o horizonte finito da renda objetivo
-                        const { idadeEsgotamento: idadeFinita } = calculatePermittedIncomeAndDepletionAge(
-                          currentAge,
-                          idadeAposentadoria,
-                          lifeExpectancy,
-                          currentPortfolio,
-                          Math.max(0, monthlyContribution || 0), // excedente mensal atual
-                          taxaRetorno,
-                          taxaRetorno,
-                          liquidityEvents,
-                          false,
-                          rendaMensal
-                        );
-                        return idadeFinita ? `${Math.round(idadeFinita)} anos` : 'Perpétuo';
-                      })()}
-                    </div>
+                <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[8], borderColor: chartPalette.secondary, borderWidth: '1px', borderStyle: 'solid' }}>
+                  <div className="text-xs font-medium mb-1" style={{ color: chartPalette.secondary }}>Renda Alcançável até os 100 anos</div>
+                  <div className="text-sm font-bold" style={{ color: chartPalette.secondary }}>
+                    {formatCurrency(reachableIncome || 0)}
                   </div>
                 </div>
               </div>
@@ -1515,7 +1535,28 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   <p className="text-xs mt-1" style={{ color: chartPalette.emphasis, opacity: 0.7 }}>Objetivo: {formatCurrency(rendaMensalDesejada)}</p>
                 </div>
 
-                {/* Seção de resultados da simulação removida por solicitação */}
+                {/* Resultados da Simulação */}
+                <div className="mt-4">
+                  <div className="p-3 rounded-md" style={{ backgroundColor: chartPalette.alpha[4], borderColor: chartPalette.secondary, borderWidth: '1px', borderStyle: 'solid' }}>
+                    <div className="text-xs font-medium mb-1" style={{ color: chartPalette.secondary }}>Renda Alcançável até os 100 anos</div>
+                    <div className="text-sm font-bold" style={{ color: chartPalette.secondary }}>
+                      {(() => {
+                        const { rendaPermitida } = calculatePermittedIncomeAndDepletionAge(
+                          currentAge,
+                          idadeAposentadoria,
+                          lifeExpectancy,
+                          currentPortfolio,
+                          aporteMensal,
+                          taxaRetorno,
+                          taxaRetorno,
+                          liquidityEvents,
+                          isPerpetuity
+                        );
+                        return formatCurrency(rendaPermitida || 0);
+                      })()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1535,6 +1576,7 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   onValueChange={(value) => {
                     const newTaxaRetorno = value[0] / 100;
                     setTaxaRetorno(newTaxaRetorno);
+                    onTaxaRetornoChange?.(newTaxaRetorno);
 
                     // Recalcula a projeção com os novos valores
                     const aporteAtual = Math.max(0, monthlyContribution || 0);
@@ -1569,6 +1611,21 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                     );
                     setReachableIncome(rendaPermitida);
                     setIdadeEsgotamento(idadeFim ?? null);
+                    
+                    // Atualiza a renda objetivo baseada no aporte atual com a nova taxa
+                    const aporteParaRenda = overrideAporte != null ? overrideAporte : aporteMensal;
+                    const { rendaPermitida: rendaComAporte } = calculatePermittedIncomeAndDepletionAge(
+                      currentAge,
+                      idadeAposentadoria,
+                      lifeExpectancy,
+                      currentPortfolio,
+                      aporteParaRenda,
+                      newTaxaRetorno,
+                      newTaxaRetorno,
+                      liquidityEvents,
+                      isPerpetuity
+                    );
+                    setRendaMensal(rendaComAporte);
 
                     setProjection({
                       ...result,
@@ -1630,6 +1687,21 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   );
                   setReachableIncome(rendaPermitida);
                   setIdadeEsgotamento(idadeFim ?? null);
+                  
+                  // Atualiza a renda objetivo baseada no aporte atual com a nova idade de aposentadoria
+                  const aporteParaRenda = overrideAporte != null ? overrideAporte : aporteMensal;
+                  const { rendaPermitida: rendaComAporte } = calculatePermittedIncomeAndDepletionAge(
+                    currentAge,
+                    newAge,
+                    lifeExpectancy,
+                    currentPortfolio,
+                    aporteParaRenda,
+                    taxaRetorno,
+                    taxaRetorno,
+                    liquidityEvents,
+                    isPerpetuity
+                  );
+                  setRendaMensal(rendaComAporte);
 
                   setProjection({
                     ...result,
@@ -1696,6 +1768,31 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                       </div>
                     );
                   })}
+              </div>
+            </div>
+          )}
+
+          {/* Disclaimer sobre aportes PGBL */}
+          {pgblAnual && pgblAnual > 0 && externalLiquidityEvents?.some(e => e.id === 'pgbl-contributions') && (
+            <div className="mb-3 p-4 bg-muted/50 border border-border/50 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Info size={18} className="text-financial-info mt-0.5 flex-shrink-0" style={{ color: chartPalette.primary }} />
+                <div className="text-sm text-foreground">
+                  <strong className="font-semibold">Sobre os aportes PGBL sugeridos:</strong>
+                  <p className="mt-2 text-muted-foreground">
+                    O valor sugerido considera aportes anuais de 12% da renda tributável ({formatCurrency(pgblAnual)}/ano), 
+                    capitalizados até a data de aposentadoria. O cálculo assume:
+                  </p>
+                  <ul className="mt-2 ml-4 list-disc space-y-1 text-muted-foreground">
+                    <li>Aportes anuais de 12% da renda tributável (limite legal para dedução no IRPF)</li>
+                    <li>Aportes mantidos em termos reais (sem reajuste automático pela inflação)</li>
+                    <li>Taxa de retorno real de {(taxaRetorno * 100).toFixed(1)}% ao ano — a mesma configurada no simulador</li>
+                    <li>O valor total é projetado como uma entrada única na data de aposentadoria</li>
+                  </ul>
+                  <p className="mt-2 text-muted-foreground">
+                    Você pode incluí-lo manualmente clicando em "Incluir" para considerar esse valor na projeção de aposentadoria.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -1941,6 +2038,12 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
       </CardHeader>
 
       <CardContent className="p-6 pt-4">
+        <div className="mb-3 p-2 rounded-md bg-muted/30 border border-border/60">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Info size={14} className="text-accent flex-shrink-0" />
+            <span>O gráfico abaixo representa a <strong>Simulação</strong> (valores editáveis), não o Cenário Atual.</span>
+          </p>
+        </div>
         <div className="h-[320px] mb-6">
           <ChartContainer config={chartConfig} className="h-full w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -1957,6 +2060,9 @@ const RetirementProjectionChart: React.FC<RetirementProjectionChartProps> = ({
                   axisLine={{ stroke: chartPalette.primary }}
                   padding={{ left: 10, right: 10 }}
                   domain={xDomain}
+                  ticks={xAxisTicks}
+                  tickFormatter={(value) => value.toString()}
+                  minTickGap={20}
                 />
                 <YAxis
                   tickFormatter={formatYAxis}
